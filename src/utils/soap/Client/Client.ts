@@ -138,6 +138,8 @@ export default class Client {
           if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj)
             return reject(new RequestException(obj));
 
+          console.log("TO DEATH I RIDE")
+          console.log(obj)
           res(obj as T);
         })
         .catch(reject);

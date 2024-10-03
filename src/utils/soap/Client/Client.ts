@@ -198,18 +198,15 @@ export default class Client {
       });
 
       axios
-        .post<string>(url, xml, {      headers: {
-            'Content-Type': 'text/xml',
-            "Cookie":"edupointkeyversion=pLbL29JuBFfT2HwPdgcQQmZQVePkoGBBVsLaB0ztBQC/jGmbFGAFzaaqIjVo1lxv;"
-          }})
-        .then(({ data }:{data:string}) => {
+        .post<string>(url, xml, { headers: { 'Content-Type': 'text/xml' } })
+        .then(({ data }) => {
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({ ignoreAttributes: false });
 
           const obj: T | ParsedAnonymousRequestError = parserTwo.parse(
             preparse(
-              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWebResponse.ProcessWebServiceRequestMultiWebResult
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestResponse.ProcessWebServiceRequestResult
             )
           );
 

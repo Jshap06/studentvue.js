@@ -131,7 +131,7 @@ export default class Client {
 
           const obj: T | ParsedRequestError = parserTwo.parse(
             preparse(
-              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWeb.ProcessWebServiceRequestMultiWebResult
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWebResponse.ProcessWebServiceRequestMultiWebResult
             )
           );
 
@@ -204,7 +204,7 @@ export default class Client {
 
           const obj: T | ParsedAnonymousRequestError = parserTwo.parse(
             preparse(
-              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWeb.ProcessWebServiceRequestMultiWebResult
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWebResponse.ProcessWebServiceRequestMultiWebResult
             )
           );
 

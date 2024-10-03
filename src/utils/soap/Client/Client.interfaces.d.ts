@@ -90,7 +90,7 @@ export declare interface ParsedRequestResult {
   'soap:Envelope': {
     'soap:Body': {
       ProcessWebServiceRequestMultiWeb: {
-        ProcessWebServiceRequestMultiWeb: string;
+        ProcessWebServiceRequestMultiWebResult: string;
       };
     };
   };

@@ -73,6 +73,7 @@ export default class Client {
 </soap:Envelope>
    * ```
    */
+  
   protected processRequest<T extends object | undefined>(
     options: RequestOptions,
     preparse: (xml: string) => string = (xml) => xml
@@ -85,6 +86,7 @@ export default class Client {
       paramStr: {},
       ...options,
     };
+    const expressUrl=""
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,
@@ -108,12 +110,13 @@ export default class Client {
         },
       });
 
-      axios
-        .post<string>(this.district, xml, {       headers: {
-            'Content-Type': 'text/xml',
-            "Cookie":"edupointkeyversion=pLbL29JuBFfT2HwPdgcQQmZQVePkoGBBVsLaB0ztBQC/jGmbFGAFzaaqIjVo1lxv;"
-          } })
-        .then(({ data }) => {
+        fetch(expressUrl+"/fulfillAxios",{
+        'method':'POST',
+        'headers':{'Content-Type':'application/json'},
+        'body':JSON.stringify({'url':this.district,'xml':xml})
+    })
+        .then((response:any) => {
+          const data=response.json()
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({

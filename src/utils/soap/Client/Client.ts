@@ -204,7 +204,7 @@ export default class Client {
 
           const obj: T | ParsedAnonymousRequestError = parserTwo.parse(
             preparse(
-              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestResponse.ProcessWebServiceRequestResult
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWeb.ProcessWebServiceRequestMultiWebResult
             )
           );
 

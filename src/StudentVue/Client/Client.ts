@@ -46,7 +46,7 @@ export default class Client extends soap.Client {
       super
         .processRequest<ParsedRequestError>({ validateErrors: false, methodName: 'fuck'})
         .then((response) => {
-          if (response.RT_ERROR.includes("A critical error has occurred")) res();
+          if (response.RT_ERROR[0]['@_ERRROR_MESSAGE'][0].includes("A critical error has occurred")) res();
           else rej(new RequestException(response));
         })
         .catch(rej);

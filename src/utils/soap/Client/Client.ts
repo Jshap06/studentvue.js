@@ -114,7 +114,7 @@ export default class Client {
         fetch(expressUrl+"/fulfillAxios",{
         'method':'POST',
         'headers':{'Content-Type':'application/json'},
-        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted})
+        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted,'password':this.password})
     })
         .then(async(response:any) => {
           const realResponse=await response.json()

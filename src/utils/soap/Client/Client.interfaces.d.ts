@@ -89,8 +89,8 @@ export declare interface ParsedRequestResult {
   '?xml': string;
   'soap:Envelope': {
     'soap:Body': {
-      ProcessWebServiceRequestResponse: {
-        ProcessWebServiceRequestResult: string;
+      ProcessWebServiceRequestMultiWeb: {
+        ProcessWebServiceRequestMultiWeb: string;
       };
     };
   };

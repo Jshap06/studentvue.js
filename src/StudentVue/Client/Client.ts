@@ -564,7 +564,7 @@ export default class Client extends soap.Client {
             phone: optional(xmlObjectData.StudentInfo[0].Phone),
             email: optional(xmlObjectData.StudentInfo[0].EMail),
             emergencyContacts: xmlObjectData.StudentInfo[0].EmergencyContacts
-              ? xmlObjectData.StudentInfo[0].EmergencyContacts[0].EmergencyContact.map((contact) => ({
+              ? xmlObjectData.StudentInfo[0].EmergencyContacts[0].EmergencyContact?.map((contact) => ({
                   name: optional(contact['@_Name']),
                   phone: {
                     home: optional(contact['@_HomePhone']),

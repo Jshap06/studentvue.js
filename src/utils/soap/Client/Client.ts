@@ -131,7 +131,7 @@ export default class Client {
 
           const obj: T | ParsedRequestError = parserTwo.parse(
             preparse(
-              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestResponse.ProcessWebServiceRequestResult
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWeb.ProcessWebServiceRequestMultiWebResult
             )
           );
 

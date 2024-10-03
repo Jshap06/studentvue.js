@@ -115,7 +115,7 @@ export default class Client {
         'headers':{'Content-Type':'application/json'},
         'body':JSON.stringify({'url':this.district,'xml':xml})
     })
-        .then((response:any) => {
+        .then(async(response:any) => {
           const data=await response.json()
           console.log("KILL ME");
           console.log(data);

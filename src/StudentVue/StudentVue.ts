@@ -12,7 +12,7 @@ import RequestException from './RequestException/RequestException';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export function login(districtUrl: string, credentials: UserCredentials): Promise<Client> {
+export function login(districtUrl: string, credentials: UserCredentials,encrypted=false): Promise<Client> {
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
@@ -25,7 +25,7 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
         districtUrl: endpoint,
         isParent: credentials.isParent,
       },
-      `https://${host}/`
+      `https://${host}/`,encrypted
     );
     client
       .validateCredentials()

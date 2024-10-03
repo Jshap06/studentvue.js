@@ -14,6 +14,7 @@ export default class Client {
   private __password__: string;
   private __district__: string;
   private readonly isParent: number;
+  encrypted: any;
 
   private get district(): string {
     return this.__district__;
@@ -113,10 +114,12 @@ export default class Client {
         fetch(expressUrl+"/fulfillAxios",{
         'method':'POST',
         'headers':{'Content-Type':'application/json'},
-        'body':JSON.stringify({'url':this.district,'xml':xml})
+        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted})
     })
         .then(async(response:any) => {
-          const data=await response.json()
+          const realResponse=await response.json()
+          if(!realResponse.status){return reject(new Error(realResponse.message))}
+          else{var data=realResponse.response}
           console.log("KILL ME");
           console.log(data);
           const parser = new XMLParser({});
@@ -199,7 +202,7 @@ export default class Client {
             'Content-Type': 'text/xml',
             "Cookie":"edupointkeyversion=pLbL29JuBFfT2HwPdgcQQmZQVePkoGBBVsLaB0ztBQC/jGmbFGAFzaaqIjVo1lxv;"
           }})
-        .then(({ data }) => {
+        .then(({ data }:{data:string}) => {
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({ ignoreAttributes: false });

@@ -33,9 +33,11 @@ import { optional, asyncPoolAll } from './Client.helpers';
  */
 export default class Client extends soap.Client {
   private hostUrl: string;
-  constructor(credentials: LoginCredentials, hostUrl: string) {
+  encrypted: boolean;
+  constructor(credentials: LoginCredentials, hostUrl: string,encrypted:boolean) {
     super(credentials);
     this.hostUrl = hostUrl;
+    this.encrypted=encrypted
   }
 
   /**
@@ -46,8 +48,8 @@ export default class Client extends soap.Client {
       super
         .processRequest<ParsedRequestError>({ validateErrors: false, methodName: 'fuck'})
         .then((response) => {
-          if (response.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("A critical error has occurred")) res();
-          else rej(new RequestException(response));
+          if (response.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("A critical error has occurred")) {res();}
+          else{rej(new RequestException(response))};
         })
         .catch(rej);
     });

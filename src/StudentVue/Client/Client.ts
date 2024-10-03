@@ -414,7 +414,7 @@ export default class Client extends soap.Client {
                         },
                         score: {
                           type: assignment['@_ScoreType'][0],
-                          value: assignment['@_Score'][0],
+                          value: assignment['@_Score'] !== undefined ? assignment['@_Score'] : "Not Graded",
                         },
                         points: assignment['@_Points'][0],
                         notes: assignment['@_Notes'][0],
@@ -718,7 +718,7 @@ export default class Client extends soap.Client {
 
             return rest;
           }, {} as Calendar);
-          res({ ...allEvents, events: _.uniqBy(allEvents.events, (item) => item.title) } as Calendar);
+          res({ ...allEvents, events: _.uniqBy(allEvents.events, (item: { title: any; }) => item.title) } as Calendar);
         })
         .catch(rej);
     });

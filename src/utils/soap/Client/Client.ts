@@ -99,7 +99,7 @@ export default class Client {
           '@_xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
           '@_xmlns:soap': 'http://schemas.xmlsoap.org/soap/envelope/',
           'soap:Body': {
-            ProcessWebServiceRequest: {
+            ProcessWebServiceRequestMultiWeb: {
               '@_xmlns': 'http://edupoint.com/webservices/',
               userID: this.username,
               password: this.password,

@@ -44,7 +44,7 @@ export default class Client extends soap.Client {
   public validateCredentials(): Promise<void> {
     return new Promise((res, rej) => {
       super
-        .processRequest<ParsedRequestError>({ methodName: 'fuck'})
+        .processRequest<ParsedRequestError>({ validateErrors: false, methodName: 'fuck'})
         .then((response) => {
           if (response.RT_ERROR.includes("A critical error has occurred")) res();
           else rej(new RequestException(response));

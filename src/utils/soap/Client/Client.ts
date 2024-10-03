@@ -116,7 +116,9 @@ export default class Client {
         'body':JSON.stringify({'url':this.district,'xml':xml})
     })
         .then((response:any) => {
-          const data=response.json()
+          const data=await response.json()
+          console.log("KILL ME");
+          console.log(data);
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({

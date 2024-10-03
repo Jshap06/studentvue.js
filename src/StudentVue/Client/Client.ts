@@ -46,7 +46,7 @@ export default class Client extends soap.Client {
       super
         .processRequest<ParsedRequestError>({ methodName: 'ChildList'})
         .then((response) => {
-          if (response.RT_ERROR[0]['@_ERROR_MESSAGE'][0] === 'login test is not a valid method.') res();
+          if (response.RT_ERROR.includes("A critical error has occurred")) res();
           else rej(new RequestException(response));
         })
         .catch(rej);

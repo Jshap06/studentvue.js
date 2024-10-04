@@ -199,7 +199,7 @@ export default class Client {
 
       axios
         .post<string>(url, xml, { headers: { 'Content-Type': 'text/xml' } })
-        .then(({ data }) => {
+        .then(({ data }:{data:any}) => {
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({ ignoreAttributes: false });

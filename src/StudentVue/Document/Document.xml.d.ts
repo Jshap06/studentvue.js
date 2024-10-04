@@ -4,19 +4,7 @@ export declare interface DocumentXMLObject {
     '@_showDocNameColumn': string[];
     '@_StudentGU': string[];
     '@_StudentSSY': string[];
-    StudentDocumentDatas: Array<
-      | {
-          StudentDocumentData: Array<{
-            '@_DocumentGU': string[];
-            '@_DocumentFileName': string[];
-            '@_DocumentDate': string[];
-            '@_DocumentType': string[];
-            '@_StudentGU': string[];
-            '@_DocumentComment': string[];
-          }>;
-        }
-      | string
-    >;
+    StudentDocumentDatas: any
   }>;
 }
 

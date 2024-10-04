@@ -78,7 +78,7 @@ export default class Client extends soap.Client {
           else{
           res(
             xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData.map(
-              (xml) => new Document(xml, super.credentials)
+              (xml: any) => new Document(xml, super.credentials)
             )
           );}
         })
@@ -646,8 +646,8 @@ export default class Client extends soap.Client {
       const monthsWithinSchoolYear = eachMonthOfInterval({ start: schoolStartDate, end: schoolEndDate });
       const getAllEventsWithinSchoolYear = (): Promise<CalendarXMLObject[]> =>
         defaultOptions.concurrency == null
-          ? Promise.all(monthsWithinSchoolYear.map((date) => this.fetchEventsWithinInterval(date)))
-          : asyncPoolAll(defaultOptions.concurrency, monthsWithinSchoolYear, (date) =>
+          ? Promise.all(monthsWithinSchoolYear.map((date: Date) => this.fetchEventsWithinInterval(date)))
+          : asyncPoolAll(defaultOptions.concurrency, monthsWithinSchoolYear, (date:any) =>
               this.fetchEventsWithinInterval(date)
             );
       let memo: Calendar | null = null;

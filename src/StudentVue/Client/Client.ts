@@ -449,7 +449,7 @@ export default class Client extends soap.Client {
                                   case 'URL': {
                                     const urlRsrc = rsrc as URLResourceXMLObject;
                                     return {
-                                      url: (urlRsrc['@_URL'][0] ? urlRsrc['@_URL'][0] : ""),
+                                      url: urlRsrc['@_URL'] !== undefined ? urlRsrc['@_URL'] : "Not Given",
                                       type: ResourceType.URL,
                                       resource: {
                                         date: new Date(urlRsrc['@_ResourceDate'][0]),

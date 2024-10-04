@@ -1,25 +1,25 @@
 export declare interface DocumentXMLObject {
-  StudentDocuments: [
-    {
-      '@_showDateColumn': [string];
-      '@_showDocNameColumn': [string];
-      '@_StudentGU': [string];
-      '@_StudentSSY': [string];
-      StudentDocumentDatas: [
-        {
-          StudentDocumentData: {
-            '@_DocumentGU': [string];
-            '@_DocumentFileName': [string];
-            '@_DocumentDate': [string];
-            '@_DocumentType': [string];
-            '@_StudentGU': [string];
-            '@_DocumentComment': [string];
-          }[];
+  StudentDocuments: Array<{
+    '@_showDateColumn': string[];
+    '@_showDocNameColumn': string[];
+    '@_StudentGU': string[];
+    '@_StudentSSY': string[];
+    StudentDocumentDatas: Array<
+      | {
+          StudentDocumentData: Array<{
+            '@_DocumentGU': string[];
+            '@_DocumentFileName': string[];
+            '@_DocumentDate': string[];
+            '@_DocumentType': string[];
+            '@_StudentGU': string[];
+            '@_DocumentComment': string[];
+          }>;
         }
-      ];
-    }
-  ];
+      | string
+    >;
+  }>;
 }
+
 
 export declare interface DocumentFileXMLObject {
   StudentAttachedDocumentData: [

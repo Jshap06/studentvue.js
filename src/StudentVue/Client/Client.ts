@@ -74,11 +74,13 @@ export default class Client extends soap.Client {
           paramStr: { childIntId: 0 },
         })
         .then((xmlObject) => {
+          if(typeof(xmlObject['StudentDocuments'][0].StudentDocumentDatas[0])=="string"){return res}
+          else{
           res(
-            xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData?.map(
+            xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData.map(
               (xml) => new Document(xml, super.credentials)
             )
-          );
+          );}
         })
         .catch(rej);
     });

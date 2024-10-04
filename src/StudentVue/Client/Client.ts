@@ -75,7 +75,7 @@ export default class Client extends soap.Client {
         })
         .then((xmlObject) => {
           res(
-            xmlObject['StudentDocuments'][0].StudentDocumentDatas[0]?.StudentDocumentData.map(
+            xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData?.map(
               (xml) => new Document(xml, super.credentials)
             )
           );

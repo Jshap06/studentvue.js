@@ -15,7 +15,8 @@ import Document from '../Document/Document';
  */
 export default class Client extends soap.Client {
     private hostUrl;
-    constructor(credentials: LoginCredentials, hostUrl: string);
+    encrypted: boolean;
+    constructor(credentials: LoginCredentials, hostUrl: string, encrypted: boolean);
     /**
      * Validate's the user's credentials. It will throw an error if credentials are incorrect
      */

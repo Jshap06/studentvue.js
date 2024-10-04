@@ -7,7 +7,7 @@ import Client from './Client/Client';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export declare function login(districtUrl: string, credentials: UserCredentials): Promise<Client>;
+export declare function login(districtUrl: string, credentials: UserCredentials, encrypted?: boolean): Promise<Client>;
 /**
  * Find school districts using a zipcode
  * @param {string} zipCode The zipcode to get a list of schools from

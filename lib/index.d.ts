@@ -26,7 +26,7 @@ declare module 'studentvue/StudentVue/StudentVue' {
         * @param {UserCredentials} credentials User credentials of the student
         * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
         */
-    export function login(districtUrl: string, credentials: UserCredentials): Promise<Client>;
+    export function login(districtUrl: string, credentials: UserCredentials, encrypted?: boolean): Promise<Client>;
     /**
         * Find school districts using a zipcode
         * @param {string} zipCode The zipcode to get a list of schools from
@@ -184,7 +184,8 @@ declare module 'studentvue/StudentVue/Client/Client' {
         * @extends {soap.Client}
         */
     export default class Client extends soap.Client {
-            constructor(credentials: LoginCredentials, hostUrl: string);
+            encrypted: boolean;
+            constructor(credentials: LoginCredentials, hostUrl: string, encrypted: boolean);
             /**
                 * Validate's the user's credentials. It will throw an error if credentials are incorrect
                 */
@@ -536,20 +537,16 @@ declare module 'studentvue/utils/soap/Client/Client.interfaces' {
         '?xml': string;
         'soap:Envelope': {
             'soap:Body': {
-                ProcessWebServiceRequestResponse: {
-                    ProcessWebServiceRequestResult: string;
+                ProcessWebServiceRequestResponse: any;
+                ProcessWebServiceRequestMultiWebResponse: {
+                    ProcessWebServiceRequestMultiWebResult: string;
                 };
             };
         };
     }
     
     export interface ParsedRequestError {
-        RT_ERROR: [
-            {
-                '@_ERROR_MESSAGE': [string];
-                STACK_TRACE?: [string];
-            }
-        ];
+        RT_ERROR: any
     }
     
     export interface ParsedAnonymousRequestError {
@@ -1978,6 +1975,7 @@ declare module 'studentvue/StudentVue/Client/Interfaces/SchoolInfo' {
 declare module 'studentvue/utils/soap/Client/Client' {
     import { RequestOptions, LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     export default class Client {
+        encrypted: any;
         protected get credentials(): LoginCredentials;
         constructor(credentials: LoginCredentials);
         /**
@@ -2048,27 +2046,15 @@ declare module 'studentvue/StudentVue/ReportCard/ReportCard.xml' {
 
 declare module 'studentvue/StudentVue/Document/Document.xml' {
     export interface DocumentXMLObject {
-        StudentDocuments: [
-            {
-                '@_showDateColumn': [string];
-                '@_showDocNameColumn': [string];
-                '@_StudentGU': [string];
-                '@_StudentSSY': [string];
-                StudentDocumentDatas: [
-                    {
-                        StudentDocumentData: {
-                            '@_DocumentGU': [string];
-                            '@_DocumentFileName': [string];
-                            '@_DocumentDate': [string];
-                            '@_DocumentType': [string];
-                            '@_StudentGU': [string];
-                            '@_DocumentComment': [string];
-                        }[];
-                    }
-                ];
-            }
-        ];
+        StudentDocuments: Array<{
+            '@_showDateColumn': string[];
+            '@_showDocNameColumn': string[];
+            '@_StudentGU': string[];
+            '@_StudentSSY': string[];
+            StudentDocumentDatas: any
+        }>;
     }
+    
     
     export interface DocumentFileXMLObject {
         StudentAttachedDocumentData: [

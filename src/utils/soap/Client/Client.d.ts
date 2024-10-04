@@ -4,6 +4,7 @@ export default class Client {
     private __password__;
     private __district__;
     private readonly isParent;
+    encrypted: any;
     private get district();
     private get username();
     private get password();

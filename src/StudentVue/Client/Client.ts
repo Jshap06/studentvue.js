@@ -74,7 +74,7 @@ export default class Client extends soap.Client {
           paramStr: { childIntId: 0 },
         })
         .then((xmlObject) => {
-          if(typeof(xmlObject['StudentDocuments'][0].StudentDocumentDatas[0])=="string"){return res}
+          if(typeof(xmlObject['StudentDocuments'][0].StudentDocumentDatas[0])=="string"){console.log("where is my mind");return res([])}
           else{
           res(
             xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData.map(

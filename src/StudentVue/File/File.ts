@@ -12,7 +12,7 @@ export default abstract class File<T> extends soap.Client {
 
   private readonly methodName: string;
 
-  public constructor(credentials: LoginCredentials, encrypted:boolean, documentGu: string, methodName: string) {
+  public constructor(credentials: LoginCredentials, documentGu: string, methodName: string) {
     super(credentials);
 
     /**

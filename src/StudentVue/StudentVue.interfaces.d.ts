@@ -38,4 +38,6 @@ export declare interface UserCredentials extends LoginOptions {
    * The student's password
    */
   password: string;
+
+  encrypted:boolean
 }

@@ -14,7 +14,7 @@ export default class Client {
   private __password__: string;
   private __district__: string;
   private readonly isParent: number;
-  encrypted: any;
+  encrypted: boolean;
 
   private get district(): string {
     return this.__district__;
@@ -33,6 +33,7 @@ export default class Client {
       username: this.username,
       password: this.password,
       districtUrl: this.district,
+      encrypted:this.encrypted
     };
   }
 
@@ -41,6 +42,7 @@ export default class Client {
     this.__password__ = credentials.password;
     this.__district__ = credentials.districtUrl;
     this.isParent = credentials.isParent ? 1 : 0;
+    this.encrypted=credentials.encrypted;
   }
 
   /**

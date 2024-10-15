@@ -83,6 +83,8 @@ export declare interface LoginCredentials extends LoginOptions {
    * The student's district URL
    */
   districtUrl: string;
+
+  encrypted:boolean;
 }
 
 export declare interface ParsedRequestResult {

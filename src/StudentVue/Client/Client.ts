@@ -33,11 +33,9 @@ import { optional, asyncPoolAll } from './Client.helpers';
  */
 export default class Client extends soap.Client {
   private hostUrl: string;
-  encrypted: boolean;
-  constructor(credentials: LoginCredentials, hostUrl: string,encrypted:boolean) {
+  constructor(credentials: LoginCredentials, hostUrl: string) {
     super(credentials);
     this.hostUrl = hostUrl;
-    this.encrypted=encrypted
   }
 
   /**

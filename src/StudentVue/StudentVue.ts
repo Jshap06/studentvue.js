@@ -19,6 +19,8 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
     const url = new URL(districtUrl);
     url.pathname+=`/Service/PXPCommunication.asmx`;
     const endpoint = url.toString();
+    console.log("FUCK FUCK FUCK GARGLE MY BALLS");
+    console.log(url);console.log(endpoint)
     const client = new Client(
       {
         username: credentials.username,

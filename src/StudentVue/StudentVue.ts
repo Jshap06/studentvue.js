@@ -16,9 +16,9 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
-    const url = new URL(districtUrl);
-    url.pathname+=`/Service/PXPCommunication.asmx`;
-    const endpoint = url.toString();
+    const url = districtUrl.charAt(districtUrl.length - 1) === '/' ? districtUrl : `${districtUrl}/`;
+    //stadardizes so u know it'll end in a slash fo sho
+    const endpoint = url+"Service/PXPCommunication.asmx";
     const client = new Client(
       {
         username: credentials.username,
@@ -27,7 +27,7 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
         isParent: credentials.isParent,
         encrypted:credentials.encrypted
       },
-      `${url.toString()}`
+      url
     );
     client
       .validateCredentials()

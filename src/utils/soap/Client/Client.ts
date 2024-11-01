@@ -77,7 +77,7 @@ export default class Client {
    * ```
    */
   
-  protected processRequest<T extends object | undefined>(
+  public processRequest<T extends object | undefined>(
     options: RequestOptions,
     preparse: (xml: string) => string = (xml) => xml
   ): Promise<T> {

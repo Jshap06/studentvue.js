@@ -1,4 +1,5 @@
 export declare interface GradebookXMLObject {
+  gradingScale: any;
   Gradebook: [
     {
       '@_Type': [string];

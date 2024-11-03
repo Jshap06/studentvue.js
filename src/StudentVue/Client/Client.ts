@@ -346,6 +346,7 @@ export default class Client extends soap.Client {
         )
         .then((xmlObject: GradebookXMLObject) => {
           res({
+            gradingScale:xmlObject.gradingScale,
             error: xmlObject.Gradebook[0]['@_ErrorMessage'][0],
             type: xmlObject.Gradebook[0]['@_Type'][0],
             reportingPeriod: {

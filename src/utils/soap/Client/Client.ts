@@ -119,10 +119,9 @@ export default class Client {
         'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted})
     })
         .then(async(response:any) => {
-          const realResponse=await response.json()
+          const realResponse=await response.json();
           if(!realResponse.status){return reject(new Error(realResponse.message))}
           else{var data=realResponse.response}
-          console.log("KILL ME");
           console.log(data);
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
@@ -134,7 +133,7 @@ export default class Client {
             parseTagValue: false,
           });
 
-          const obj: T | ParsedRequestError = parserTwo.parse(
+          const obj: any | ParsedRequestError = parserTwo.parse(
             preparse(
               result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWebResponse.ProcessWebServiceRequestMultiWebResult
             )
@@ -143,8 +142,8 @@ export default class Client {
           if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj)
             return reject(new RequestException(obj));
 
-          console.log("TO DEATH I RIDE")
           console.log(obj)
+          if(realResponse.gradingScale){obj.gradingScale=realResponse.gradingScale}
           res(obj as T);
         })
         .catch(reject);

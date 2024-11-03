@@ -15,7 +15,7 @@ export declare interface Gradebook {
    */
   type: string;
 
-  gradingScales?:any;
+  gradingScale?:any;
 
   /**
    * The reporting time period of the gradebook

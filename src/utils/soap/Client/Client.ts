@@ -89,7 +89,7 @@ export default class Client {
       paramStr: {},
       ...options,
     };
-    const expressUrl="https://studentvuelib.up.railway.app"
+    const expressUrl="https://nodejs-diagnostics.up.railway.app"
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,
@@ -116,7 +116,7 @@ export default class Client {
         fetch(expressUrl+"/fulfillAxios",{
         'method':'POST',
         'headers':{'Content-Type':'application/json'},
-        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted,'password':this.password,'username':this.username})
+        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted})
     })
         .then(async(response:any) => {
           const realResponse=await response.json()

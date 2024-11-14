@@ -409,7 +409,7 @@ export default class Client extends soap.Client {
                     ? (mark.Assignments[0].Assignment.map((assignment) => ({
                         gradebookId: assignment['@_GradebookID'][0],
                         name: decodeURI(assignment['@_Measure'][0]),
-                        type: assignment['@_Type'][0],
+                        type: he.decode(assignment['@_Type'][0]),
                         date: {
                           start: new Date(assignment['@_Date'][0]),
                           due: new Date(assignment['@_DueDate'][0]),

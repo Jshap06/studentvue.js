@@ -373,7 +373,7 @@ export default class Client extends soap.Client {
             },
             courses: xmlObject.Gradebook[0].Courses[0].Course.map((course) => ({
               period: Number(course['@_Period'][0]),
-              title: course['@_Title'][0],
+              title: he.decode(course['@_Title'][0]),
               room: course['@_Room'][0],
               staff: {
                 name: course['@_Staff'][0],
@@ -415,11 +415,11 @@ export default class Client extends soap.Client {
                           due: new Date(assignment['@_DueDate'][0]),
                         },
                         score: {
-                          type: assignment['@_ScoreType'][0],
+                          type: he.decode(assignment['@_ScoreType'][0]),
                           value: assignment['@_Score'] !== undefined ? assignment['@_Score'] : "Not Graded",
                         },
                         points: assignment['@_Points'][0],
-                        notes: assignment['@_Notes'][0],
+                        notes: he.decode(assignment['@_Notes'][0]),
                         teacherId: assignment['@_TeacherID'][0],
                         description: decodeURI(assignment['@_MeasureDescription'][0]),
                         hasDropbox: JSON.parse(assignment['@_HasDropBox'][0]),

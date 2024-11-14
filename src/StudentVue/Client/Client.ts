@@ -25,6 +25,7 @@ import RequestException from '../RequestException/RequestException';
 import XMLFactory from '../../utils/XMLFactory/XMLFactory';
 import cache from '../../utils/cache/cache';
 import { optional, asyncPoolAll } from './Client.helpers';
+import he from "he";
 
 /**
  * The StudentVUE Client to access the API
@@ -390,7 +391,7 @@ export default class Client extends soap.Client {
                     ? mark['GradeCalculationSummary'][0].AssignmentGradeCalc.map(
                         (weighted) =>
                           ({
-                            type: weighted['@_Type'][0],
+                            type: he.decode(weighted['@_Type'][0]),
                             calculatedMark: weighted['@_CalculatedMark'][0],
                             weight: {
                               evaluated: weighted['@_WeightedPct'][0],

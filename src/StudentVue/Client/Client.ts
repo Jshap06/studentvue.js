@@ -516,7 +516,10 @@ export default class Client extends soap.Client {
     return new Promise<StudentInfo>((res,rej)=>{
       super
         .processRequest({methodName:"ChildList"})
-          .then((xmlObject:any)=>{res({
+          .then((xmlObject:any)=>{
+            console.log("BATHE ME IN MY HUBRIS")
+            console.log(Object.keys(xmlObject[0]));
+            res({
             student:{
               name:xmlObject[0].Child[0].ChildName, //full Name on this fallback method
               lastName:"not available",

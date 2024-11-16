@@ -508,6 +508,44 @@ export default class Client extends soap.Client {
     });
   }
 
+
+
+  //altnerate method for studentInfo when studentInfo fails:
+  //those things commented out are not applicable here
+  public ChildList():Promise<StudentInfo>{
+    return new Promise<StudentInfo>((res,rej)=>{
+      super
+        .processRequest({methodName:"ChildList"})
+          .then((xmlObject:any)=>{res({
+            student:{
+              name:xmlObject.child[0].ChildName, //full Name on this fallback method
+              lastName:"not available",
+              nickname:"not available"},
+          //  birthDate:new Date(),
+           // track:"not available",
+           // address:"not available",
+            photo:optional(xmlObject.child[0].photo),
+            counselor:undefined,
+            currentSchool:xmlObject.child[0].OrganizationName,
+           // dentist:undefined,
+            // physician:undefined,
+              id:optional(xmlObject.child[0]['@_ChildPermID']),
+              orgYearGu:optional(xmlObject.child[0]['@_OrgYearGU']),
+              //phone:"not available",
+              //email:"not available",
+              //emergencyContacts:undefined,
+              gender:"null",
+              grade:optional(xmlObject.child[0].Grade),
+              
+
+
+
+          } as StudentInfo)})
+          .catch(rej)
+    })
+  }
+
+
   /**
    * Gets the info of a student
    * @returns {Promise<StudentInfo>} StudentInfo object

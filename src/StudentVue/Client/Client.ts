@@ -519,7 +519,7 @@ export default class Client extends soap.Client {
           .then((xmlObject:any)=>{
             console.log("BATHE ME IN MY HUBRIS")
             xmlObject=xmlObject.ChildList[0];
-            console.log(Object.keys(xmlObject.ChildList[0]));
+            console.log(Object.keys(xmlObject));
             res({
             student:{
               name:xmlObject.Child[0].ChildName, //full Name on this fallback method

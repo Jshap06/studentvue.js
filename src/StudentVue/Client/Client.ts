@@ -518,27 +518,27 @@ export default class Client extends soap.Client {
         .processRequest({methodName:"ChildList"})
           .then((xmlObject:any)=>{
             console.log("BATHE ME IN MY HUBRIS")
-            console.log(Object.keys(xmlObject[0]));
+            console.log(Object.keys(xmlObject));
             res({
             student:{
-              name:xmlObject[0].Child[0].ChildName, //full Name on this fallback method
+              name:xmlObject.Child[0].ChildName, //full Name on this fallback method
               lastName:"not available",
               nickname:"not available"},
           //  birthDate:new Date(),
            // track:"not available",
            // address:"not available",
-            photo:optional(xmlObject[0].Child[0].photo),
+            photo:optional(xmlObject.Child[0].photo),
             counselor:undefined,
-            currentSchool:xmlObject[0].Child[0].OrganizationName,
+            currentSchool:xmlObject.Child[0].OrganizationName,
            // dentist:undefined,
             // physician:undefined,
-              id:optional(xmlObject[0].Child[0]['@_ChildPermID']),
-              orgYearGu:optional(xmlObject[0].Child[0]['@_OrgYearGU']),
+              id:optional(xmlObject.Child[0]['@_ChildPermID']),
+              orgYearGu:optional(xmlObject.Child[0]['@_OrgYearGU']),
               //phone:"not available",
               //email:"not available",
               //emergencyContacts:undefined,
               gender:"null",
-              grade:optional(xmlObject[0].Child[0].Grade),
+              grade:optional(xmlObject.Child[0].Grade),
 
 
 

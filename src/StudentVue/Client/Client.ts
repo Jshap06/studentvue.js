@@ -530,7 +530,7 @@ export default class Client extends soap.Client {
            // address:"not available",
             photo:optional(xmlObject.Child[0].photo),
             counselor:undefined,
-            currentSchool:xmlObject.Child[0].OrganizationName,
+            currentSchool:xmlObject.Child[0].OrganizationName[0],
            // dentist:undefined,
             // physician:undefined,
               id:optional(xmlObject.Child[0]['@_ChildPermID']),

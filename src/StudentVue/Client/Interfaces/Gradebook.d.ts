@@ -99,7 +99,7 @@ export declare interface Course {
    * The grade marks of the class
    * @type {Mark[]}
    */
-  marks: [""] | Mark[];
+  marks: Mark[];
 }
 
 /**

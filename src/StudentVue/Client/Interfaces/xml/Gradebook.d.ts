@@ -32,7 +32,7 @@ export declare interface GradebookXMLObject {
             '@_StaffEMail': [string];
             '@_StaffGU': [string];
             '@_HighlightPercentageCutOffForProgressBar': [string];
-            Marks: {
+            Marks: | {
               Mark: [
                 {
                   '@_MarkName': [string];
@@ -86,7 +86,7 @@ export declare interface GradebookXMLObject {
                       ];
                 }
               ];
-            }[];
+            }[] | [""];
           }
         ];
       }[];

@@ -380,7 +380,7 @@ export default class Client extends soap.Client {
                 email: course['@_StaffEMail'][0],
                 staffGu: course['@_StaffGU'][0],
               },
-              marks: course.Marks[0].Mark.map((mark) => ({
+              marks: course.Marks[0]!="" ? (course.Marks[0].Mark.map((mark) => ({
                 name: mark['@_MarkName'][0],
                 calculatedScore: {
                   string: mark['@_CalculatedScoreString'][0],
@@ -471,7 +471,7 @@ export default class Client extends soap.Client {
                             : [],
                       })) as Assignment[])
                     : [],
-              })) as Mark[],
+              }))) as Mark[]: "",
             })),
           } as Gradebook);
         })

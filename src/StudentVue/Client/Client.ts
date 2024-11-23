@@ -471,7 +471,7 @@ export default class Client extends soap.Client {
                             : [],
                       })) as Assignment[])
                     : [],
-              }))) as Mark[]:{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }
+              }))) as Mark[]:[{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],
             })),
           } as Gradebook);
         })

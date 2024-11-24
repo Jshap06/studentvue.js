@@ -345,7 +345,10 @@ export default class Client extends soap.Client {
               .encodeAttribute('Measure', 'Type')
               .toString()
         )
-        .then((xmlObject: GradebookXMLObject) => {
+        .then((xmlObject: GradebookXMLObject | any) => {
+            if (xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("The user name or password is incorrect")||xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("Invalid user id or password")) {rej(new Error("Invalid/Incorrect Username or Password"));}
+            else{rej(new RequestException(xmlObject))};
+        
           res({
             gradingScale:xmlObject.gradingScale,
             error: xmlObject.Gradebook[0]['@_ErrorMessage'][0],
@@ -356,7 +359,7 @@ export default class Client extends soap.Client {
                   reportingPeriodIndex ??
                   Number(
                     xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.find(
-                      (x) => x['@_GradePeriod'][0] === xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0]
+                      (x:any) => x['@_GradePeriod'][0] === xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0]
                     )?.['@_Index'][0]
                   ),
                 date: {
@@ -365,13 +368,13 @@ export default class Client extends soap.Client {
                 },
                 name: xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0],
               },
-              available: xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.map((period) => ({
+              available: xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.map((period:any) => ({
                 date: { start: new Date(period['@_StartDate'][0]), end: new Date(period['@_EndDate'][0]) },
                 name: period['@_GradePeriod'][0],
                 index: Number(period['@_Index'][0]),
               })),
             },
-            courses: xmlObject.Gradebook[0].Courses[0].Course.map((course) => ({
+            courses: xmlObject.Gradebook[0].Courses[0].Course.map((course:any) => ({
               period: Number(course['@_Period'][0]),
               title: he.decode(course['@_Title'][0]),
               room: course['@_Room'][0],
@@ -380,7 +383,7 @@ export default class Client extends soap.Client {
                 email: course['@_StaffEMail'][0],
                 staffGu: course['@_StaffGU'][0],
               },
-              marks: typeof(course.Marks[0])!=='string' ? (course.Marks[0].Mark.map((mark) => ({
+              marks: typeof(course.Marks[0])!=='string' ? (course.Marks[0].Mark.map((mark:any) => ({
                 name: mark['@_MarkName'][0],
                 calculatedScore: {
                   string: mark['@_CalculatedScoreString'][0],
@@ -389,7 +392,7 @@ export default class Client extends soap.Client {
                 weightedCategories:
                   typeof mark['GradeCalculationSummary'][0] !== 'string'
                     ? mark['GradeCalculationSummary'][0].AssignmentGradeCalc.map(
-                        (weighted) =>
+                        (weighted: { [x: string]: any[]; }) =>
                           ({
                             type: he.decode(weighted['@_Type'][0]),
                             calculatedMark: weighted['@_CalculatedMark'][0],
@@ -406,7 +409,7 @@ export default class Client extends soap.Client {
                     : [],
                 assignments:
                   typeof mark.Assignments[0] !== 'string'
-                    ? (mark.Assignments[0].Assignment.map((assignment) => ({
+                    ? (mark.Assignments[0].Assignment.map((assignment:any) => ({
                         gradebookId: assignment['@_GradebookID'][0],
                         name: decodeURI(assignment['@_Measure'][0]),
                         type: he.decode(assignment['@_Type'][0]),
@@ -430,7 +433,7 @@ export default class Client extends soap.Client {
                         },
                         resources:
                           typeof assignment.Resources[0] !== 'string'
-                            ? (assignment.Resources[0].Resource.map((rsrc) => {
+                            ? (assignment.Resources[0].Resource.map((rsrc:any) => {
                                 switch (rsrc['@_Type'][0]) {
                                   case 'File': {
                                     const fileRsrc = rsrc as FileResourceXMLObject;

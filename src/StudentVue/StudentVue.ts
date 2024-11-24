@@ -3,6 +3,7 @@ import Client from './Client/Client';
 import soap from '../utils/soap/soap';
 import { DistrictListXMLObject } from './StudentVue.xml';
 import RequestException from './RequestException/RequestException';
+import { Gradebook } from './Client/Client.interfaces';
 
 /** @module StudentVue */
 
@@ -12,7 +13,7 @@ import RequestException from './RequestException/RequestException';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export function login(districtUrl: string, credentials: UserCredentials): Promise<Client> {
+export function login(districtUrl: string, credentials: UserCredentials): Promise<[Client,Gradebook]> {
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
@@ -30,9 +31,9 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
       url
     );
     client
-      .validateCredentials()
-      .then(() => {
-        res(client);
+      .gradebook()
+      .then((gradebook) => {
+        res([client,gradebook]);
       })
       .catch(rej);
   });

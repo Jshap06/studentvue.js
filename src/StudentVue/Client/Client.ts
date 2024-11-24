@@ -346,8 +346,10 @@ export default class Client extends soap.Client {
               .toString()
         )
         .then((xmlObject: GradebookXMLObject | any) => {
+          try{
             if (xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("The user name or password is incorrect")||xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("Invalid user id or password")) {rej(new Error("Invalid/Incorrect Username or Password"));}
-            else{rej(new RequestException(xmlObject))};
+            else{rej(new RequestException(xmlObject))};}
+          catch(e){
         
           res({
             gradingScale:xmlObject.gradingScale,
@@ -476,7 +478,7 @@ export default class Client extends soap.Client {
                     : [],
               }))) as Mark[]:[{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],
             })),
-          } as Gradebook);
+          } as Gradebook);}
         })
         .catch(rej);
     });

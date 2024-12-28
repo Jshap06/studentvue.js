@@ -142,7 +142,7 @@ export default class Client {
           if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj)
             return reject(new RequestException(obj));
 
-          console.log(obj)
+          console.log(JSON.stringify(obj),"captain, my captain")
           if(realResponse.gradingScale){obj.gradingScale=realResponse.gradingScale}
           res(obj as T);
         })

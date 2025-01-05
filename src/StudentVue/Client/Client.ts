@@ -139,6 +139,7 @@ export default class Client extends soap.Client {
         })
         .then((result) => {
           const xmlObject=result.StudentSchoolInfoListing[0];
+          //@ts-ignore
           xmlObject.extraData=result.extraData;
           res([{
             school: {

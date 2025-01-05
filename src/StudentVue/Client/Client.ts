@@ -65,7 +65,7 @@ export default class Client extends soap.Client {
    * const base64collection = files.map((file) => file.base64);
    * ```
    */
-  public documents(): Promise<Document[]> {
+  public documents(): Promise<[Document[],any]> {
     return new Promise((res, rej) => {
       super
         .processRequest<DocumentXMLObject>({
@@ -73,12 +73,16 @@ export default class Client extends soap.Client {
           paramStr: { childIntId: 0 },
         })
         .then((xmlObject) => {
-          if(typeof(xmlObject['StudentDocuments'][0].StudentDocumentDatas[0])=="string"){console.log("where is my mind");return res([])}
+          if(typeof(xmlObject['StudentDocuments'][0].StudentDocumentDatas[0])=="string"){console.log("where is my mind");return res([[],
+            // @ts-ignore
+            xmlObject.extraData])}
           else{
-          res(
+          res([
             xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData.map(
               (xml: any) => new Document(xml, super.credentials)
-            )
+            ),
+            //@ts-ignore
+            xmlObject.extraData]
           );}
         })
         .catch(rej);
@@ -95,7 +99,7 @@ export default class Client extends soap.Client {
    * const base64arr = files.map((file) => file.base64); // ["JVBERi0...", "dUIoa1...", ...];
    * ```
    */
-  public reportCards(): Promise<ReportCard[]> {
+  public reportCards(): Promise<[ReportCard[],any]> {
     return new Promise((res, rej) => {
       super
         .processRequest<ReportCardsXMLObject>({
@@ -103,10 +107,11 @@ export default class Client extends soap.Client {
           paramStr: { childIntId: 0 },
         })
         .then((xmlObject) => {
-          res(
+          res([
             xmlObject.RCReportingPeriodData[0].RCReportingPeriods[0].RCReportingPeriod.map(
               (xml) => new ReportCard(xml, super.credentials)
-            )
+              //@ts-ignore
+            ),xmlObject.extraData]
           );
         })
         .catch(rej);
@@ -125,15 +130,17 @@ export default class Client extends soap.Client {
    * })
    * ```
    */
-  public schoolInfo(): Promise<SchoolInfo> {
+  public schoolInfo(): Promise<[SchoolInfo,any]> {
     return new Promise((res, rej) => {
       super
-        .processRequest<SchoolInfoXMLObject>({
+        .processRequest<SchoolInfoXMLObject&{extraData?:any}>({
           methodName: 'StudentSchoolInfo',
           paramStr: { childIntID: 0 },
         })
-        .then(({ StudentSchoolInfoListing: [xmlObject] }) => {
-          res({
+        .then((result) => {
+          const xmlObject=result.StudentSchoolInfoListing[0];
+          xmlObject.extraData=result.extraData;
+          res([{
             school: {
               address: xmlObject['@_SchoolAddress'][0],
               addressAlt: xmlObject['@_SchoolAddress2'][0],
@@ -155,7 +162,8 @@ export default class Client extends soap.Client {
               extn: staff['@_Extn'][0],
               phone: staff['@_Phone'][0],
             })),
-          });
+            //@ts-ignore
+          },xmlObject.extraData]);
         })
         .catch(rej);
     });
@@ -170,7 +178,7 @@ export default class Client extends soap.Client {
    * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
    * ```
    */
-  public schedule(termIndex?: number): Promise<Schedule> {
+  public schedule(termIndex?: number): Promise<[Schedule,any]> {
     return new Promise((res, rej) => {
       super
         .processRequest<ScheduleXMLObject>({
@@ -178,7 +186,7 @@ export default class Client extends soap.Client {
           paramStr: { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) },
         })
         .then((xmlObject) => {
-          res({
+          res([{
             term: {
               index: Number(xmlObject.StudentClassSchedule[0]['@_TermIndex'][0]),
               name: xmlObject.StudentClassSchedule[0]['@_TermIndexName'][0],
@@ -241,7 +249,10 @@ export default class Client extends soap.Client {
               name: term['@_TermName'][0],
               schoolYearTermCodeGu: term['@_SchoolYearTrmCodeGU'][0],
             })),
-          });
+          },
+          //@ts-ignore
+        xmlObject.extraData]
+        );
         })
         .catch(rej);
     });
@@ -256,7 +267,7 @@ export default class Client extends soap.Client {
    *  .then(console.log); // -> { type: 'Period', period: {...}, schoolName: 'University High School', absences: [...], periodInfos: [...] }
    * ```
    */
-  public attendance(): Promise<Attendance> {
+  public attendance(): Promise<[Attendance,any]> {
     return new Promise((res, rej) => {
       super
         .processRequest<AttendanceXMLObject>({
@@ -267,8 +278,10 @@ export default class Client extends soap.Client {
         })
         .then((attendanceXMLObject) => {
           const xmlObject = attendanceXMLObject.Attendance[0];
+          //@ts-ignore
+          xmlObject.extraData=attendanceXMLObject.extraData
 
-          res({
+          res([{
             type: xmlObject['@_Type'][0],
             period: {
               total: Number(xmlObject['@_PeriodCount'][0]),
@@ -309,7 +322,10 @@ export default class Client extends soap.Client {
                 unexcusedTardies: Number(xmlObject.TotalUnexcusedTardies[0].PeriodTotal[i]['@_Total'][0]),
               },
             })) as PeriodInfo[],
-          } as Attendance);
+          } as Attendance,
+          //@ts-ignore
+        xmlObject.extraData]
+        );
         })
         .catch(rej);
     });
@@ -328,10 +344,10 @@ export default class Client extends soap.Client {
    * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
    * ```
    */
-  public gradebook(reportingPeriodIndex?: number): Promise<Gradebook> {
+  public gradebook(reportingPeriodIndex?: number): Promise<[Gradebook,any]> {
     return new Promise((res, rej) => {
       super
-        .processRequest<GradebookXMLObject>(
+        .processRequest<GradebookXMLObject&{extraData?:any}>(
           {
             methodName: 'Gradebook',
             paramStr: {
@@ -351,8 +367,8 @@ export default class Client extends soap.Client {
             else{rej(new RequestException(xmlObject))};}
           catch(e){
         
-          res({
-            gradingScale:xmlObject.gradingScale,
+          res([{
+            extraData:xmlObject.extraData,
             error: xmlObject.Gradebook[0]['@_ErrorMessage'][0],
             type: xmlObject.Gradebook[0]['@_Type'][0],
             reportingPeriod: {
@@ -478,7 +494,9 @@ export default class Client extends soap.Client {
                     : [],
               }))) as Mark[]:[{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],
             })),
-          } as Gradebook);}
+          } as Gradebook,
+        xmlObject.extraData]
+        );}
         })
         .catch(rej);
     });
@@ -492,7 +510,7 @@ export default class Client extends soap.Client {
    * await client.messages(); // -> [{ id: 'E972F1BC-99A0-4CD0-8D15-B18968B43E08', type: 'StudentActivity', ... }, { id: '86FDA11D-42C7-4249-B003-94B15EB2C8D4', type: 'StudentActivity', ... }]
    * ```
    */
-  public messages(): Promise<Message[]> {
+  public messages(): Promise<[Message[],any]> {
     return new Promise((res, rej) => {
       super
         .processRequest<MessageXMLObject>(
@@ -503,10 +521,11 @@ export default class Client extends soap.Client {
           (xml) => new XMLFactory(xml).encodeAttribute('Content', 'Read').toString()
         )
         .then((xmlObject) => {
-          res(
+          res([
             xmlObject.PXPMessagesData[0].MessageListings[0].MessageListing.map(
               (message) => new Message(message, super.credentials, this.hostUrl)
-            )
+              // @ts-ignore //fucking sue me
+            ),xmlObject?.extraData]
           );
         })
         .catch(rej);
@@ -517,15 +536,15 @@ export default class Client extends soap.Client {
 
   //altnerate method for studentInfo when studentInfo fails:
   //those things commented out are not applicable here
-  public ChildList():Promise<StudentInfo>{
-    return new Promise<StudentInfo>((res,rej)=>{
+  public ChildList():Promise<[StudentInfo,any]>{
+    return new Promise<[StudentInfo,any]>((res,rej)=>{
       super
         .processRequest({methodName:"ChildList"})
           .then((xmlObject:any)=>{
-
+            const raw=xmlObject;
             xmlObject=xmlObject.ChildList[0];
 
-            res({
+            res([{
             student:{
               name:xmlObject.Child[0].ChildName, //full Name on this fallback method
               lastName:"not available",
@@ -549,7 +568,7 @@ export default class Client extends soap.Client {
 
 
 
-          } as StudentInfo)})
+          } as StudentInfo,raw.extraData])})
           .catch(rej)
     })
   }
@@ -563,15 +582,15 @@ export default class Client extends soap.Client {
    * studentInfo().then(console.log) // -> { student: { name: 'Evan Davis', nickname: '', lastName: 'Davis' }, ...}
    * ```
    */
-  public studentInfo(): Promise<StudentInfo> {
-    return new Promise<StudentInfo>((res, rej) => {
+  public studentInfo(): Promise<[StudentInfo,any]> {
+    return new Promise<[StudentInfo,any]>((res, rej) => {
       super
         .processRequest<StudentInfoXMLObject>({
           methodName: 'StudentInfo',
           paramStr: { childIntId: 0 },
         })
         .then((xmlObjectData) => {
-          res({
+          res([{
             student: {
               name: xmlObjectData.StudentInfo[0].FormattedName[0],
               lastName: xmlObjectData.StudentInfo[0].LastNameGoesBy[0],
@@ -650,7 +669,8 @@ export default class Client extends soap.Client {
                   })) as AdditionalInfoItem[],
                 })) as AdditionalInfo[])
               : [],
-          } as StudentInfo);
+              //@ts-ignore You will never make me use typeScript.
+          } as StudentInfo,xmlObjectData.extraData]);
         })
         .catch(rej);
     });

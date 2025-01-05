@@ -143,7 +143,10 @@ export default class Client {
             return reject(new RequestException(obj));
 
           console.log(JSON.stringify(obj),"captain, my captain")
-          if(realResponse.gradingScale){obj.gradingScale=realResponse.gradingScale}
+         delete realResponse.response
+         if(Object.keys(realResponse).length>0){
+          obj.extraData=realResponse
+         }
           res(obj as T);
         })
         .catch(reject);

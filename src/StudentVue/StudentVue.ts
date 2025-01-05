@@ -13,7 +13,7 @@ import { Gradebook } from './Client/Client.interfaces';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export function login(districtUrl: string, credentials: UserCredentials): Promise<[Client,Gradebook]> {
+export function login(districtUrl: string, credentials: UserCredentials): Promise<[Client,Gradebook,any]> {
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
@@ -33,7 +33,7 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
     client
       .gradebook()
       .then((gradebook) => {
-        res([client,gradebook]);
+        res([client,...gradebook]);
       })
       .catch(rej);
   });

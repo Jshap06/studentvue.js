@@ -1,6 +1,7 @@
 export declare interface SchoolInfoXMLObject {
   StudentSchoolInfoListing: [
     {
+      extraData: any;
       '@_School': [string];
       '@_Principal': [string];
       '@_SchoolAddress': [string];

@@ -369,7 +369,6 @@ export default class Client extends soap.Client {
           catch(e){
         
           res([{
-            extraData:xmlObject.extraData,
             error: xmlObject.Gradebook[0]['@_ErrorMessage'][0],
             type: xmlObject.Gradebook[0]['@_Type'][0],
             reportingPeriod: {

@@ -32,8 +32,9 @@ export function login(districtUrl: string, credentials: UserCredentials): Promis
     );
     client
       .gradebook()
-      .then((gradebook) => {
-        res([client,...gradebook]);
+      .then((response) => {
+        console.log("merry gyatmas",response);
+        res([client,...response]);
       })
       .catch(rej);
   });

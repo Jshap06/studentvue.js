@@ -14,8 +14,7 @@ export declare interface Gradebook {
    * The type of gradebook. It's usually `Traditional` if the student's class uses a letter-grade scale
    */
   type: string;
-
-  gradingScale?:any;
+  
 
   /**
    * The reporting time period of the gradebook

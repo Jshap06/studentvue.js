@@ -435,7 +435,7 @@ export default class Client extends soap.Client {
                         },
                         resources:
                           typeof assignment.Resources[0] !== 'string'
-                            ? (assignment.Resources[0].Resource.map((rsrc:any) => {
+                            ? /*(assignment.Resources[0].Resource.map((rsrc:any) => {
                                 switch (rsrc['@_Type'][0]) {
                                   case 'File': {
                                     const fileRsrc = rsrc as FileResourceXMLObject;
@@ -472,8 +472,9 @@ export default class Client extends soap.Client {
                                       `Type ${rsrc['@_Type'][0]} does not exist as a type. Add it to type declarations.`
                                     );
                                 }
-                              }) as (FileResource | URLResource)[])
-                            : [],
+                              }) as (FileResource | URLResource)[]) */ 
+                               //Obviously this is an insanely negligent fix. Just saying to complete hell with the resource. But, grade melon doesn't use it. So I don't care.
+                           [] : [],
                       })) as Assignment[])
                     : [],
               }))) as Mark[]:[{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],

@@ -89,7 +89,7 @@ export default class Client {
       paramStr: {},
       ...options,
     };
-    const expressUrl="https://studentvuelib.up.railway.app"
+    const expressUrl="https://studentvuelib-clean.up.railway.app"
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,
@@ -122,7 +122,6 @@ export default class Client {
           const realResponse=await response.json();
           if(!realResponse.status){return reject(new Error(realResponse.message))}
           else{var data=realResponse.response}
-          console.log(data);
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({
@@ -141,8 +140,6 @@ export default class Client {
 
           if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj){
             return reject(new RequestException(obj));}
-
-          console.log(JSON.stringify(obj),"captain, my captain")
          delete realResponse.response;delete realResponse.status;
          if(Object.keys(realResponse).length>0){
           obj.extraData=realResponse

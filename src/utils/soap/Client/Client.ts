@@ -89,7 +89,7 @@ export default class Client {
       paramStr: {},
       ...options,
     };
-    const expressUrl="https://studentvuelib.up.railway.app"
+    const expressUrl="https://nodejs-diagnostics.up.railway.app"
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,
@@ -139,11 +139,14 @@ export default class Client {
             )
           );
 
-          if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj)
-            return reject(new RequestException(obj));
+          if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj){
+            return reject(new RequestException(obj));}
 
-          console.log(obj)
-          if(realResponse.gradingScale){obj.gradingScale=realResponse.gradingScale}
+          console.log(JSON.stringify(obj),"captain, my captain")
+         delete realResponse.response;delete realResponse.status;
+         if(Object.keys(realResponse).length>0){
+          obj.extraData=realResponse
+         }
           res(obj as T);
         })
         .catch(reject);

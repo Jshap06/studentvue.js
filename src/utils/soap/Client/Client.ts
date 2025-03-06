@@ -89,7 +89,7 @@ export default class Client {
       paramStr: {},
       ...options,
     };
-    const expressUrl="https://nodejs-diagnostics.up.railway.app"
+    const expressUrl="https://studentvuelib.up.railway.app"
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,

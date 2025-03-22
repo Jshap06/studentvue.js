@@ -13,6 +13,7 @@ export default class Client {
   private __username__: string;
   private __password__: string;
   private __district__: string;
+  private url:string;
   private readonly isParent: number;
   encrypted: boolean;
 
@@ -37,12 +38,13 @@ export default class Client {
     };
   }
 
-  constructor(credentials: LoginCredentials) {
+  constructor(credentials: LoginCredentials,url:string) {
     this.__username__ = credentials.username;
     this.__password__ = credentials.password;
     this.__district__ = credentials.districtUrl;
     this.isParent = credentials.isParent ? 1 : 0;
     this.encrypted=credentials.encrypted;
+    this.url=url;
   }
 
   /**
@@ -89,7 +91,7 @@ export default class Client {
       paramStr: {},
       ...options,
     };
-    const expressUrl="https://nodejs-diagnostics.up.railway.app";
+    const expressUrl=this.url;
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,

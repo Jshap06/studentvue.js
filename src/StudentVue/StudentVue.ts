@@ -28,7 +28,7 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
         isParent: credentials.isParent,
         encrypted:credentials.encrypted
       },
-      proxyUrl
+      proxyUrl,url
     );
     client
       .gradebook()

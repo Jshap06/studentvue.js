@@ -34,8 +34,8 @@ import he from "he";
  */
 export default class Client extends soap.Client {
   private hostUrl: string;
-  constructor(credentials: LoginCredentials, hostUrl: string) {
-    super(credentials);
+  constructor(credentials: LoginCredentials, proxyUrl:string,hostUrl: string) {
+    super(credentials,proxyUrl);
     this.hostUrl = hostUrl;
   }
 

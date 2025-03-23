@@ -44,6 +44,7 @@ export default class Client {
     this.__district__ = credentials.districtUrl;
     this.isParent = credentials.isParent ? 1 : 0;
     this.encrypted=credentials.encrypted;
+    console.log("i am the constructor",Purl,Client.url)
     Client.url=Purl;
   }
 

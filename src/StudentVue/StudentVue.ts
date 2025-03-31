@@ -33,10 +33,19 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
     client
       .gradebook()
       .then((response) => {
-        console.log("merry gyatmas",response,proxyUrl);
+        console.log("immediate login response",response,proxyUrl);
         res([client,...response]);
       })
       .catch(rej);
+
+    const p1=client.gradebook();
+    const p2=client.ChildList();
+    Promise.all([p1,p2]).then(all=>{
+      const [grades,info]=all
+      if(info.)
+
+    })
+    
   });
 }
 

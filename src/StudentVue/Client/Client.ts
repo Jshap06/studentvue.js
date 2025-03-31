@@ -28,6 +28,28 @@ import { optional, asyncPoolAll } from './Client.helpers';
 import he from "he";
 
 /**
+ * TO DO; rewrite the studentInfo stuff to primary ChildList with studentInfo as the fallback, 
+ * make the type REQUIRE the info about school concurrency, thusly, the login function will determine it in the immediate by concurrenrtly performing the fetches
+ * to thusly have a minimal speed impact
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
  * The StudentVUE Client to access the API
  * @constructor
  * @extends {soap.Client}
@@ -345,7 +367,7 @@ export default class Client extends soap.Client {
    * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
    * ```
    */
-  public gradebook(reportingPeriodIndex?: number): Promise<[Gradebook,any]> {
+  public gradebook(reportingPeriodIndex?: number,orgYearGu?:string): Promise<[Gradebook,any]> {
     return new Promise((res, rej) => {
       super
         .processRequest<GradebookXMLObject&{extraData?:any}>(
@@ -354,6 +376,7 @@ export default class Client extends soap.Client {
             paramStr: {
               childIntId: 0,
               ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
+              ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {})
             },
           },
           (xml) =>

@@ -201,82 +201,50 @@ export default class Client extends soap.Client {
    * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
    * ```
    */
-  public schedule(termIndex?: number): Promise<[Schedule,any]> {
+  public schedule(termIndex?: number): Promise<[any,any]> {
     return new Promise((res, rej) => {
       super
-        .processRequest<ScheduleXMLObject>({
+        .processRequest<any>({
           methodName: 'StudentClassList',
           paramStr: { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) },
         })
-        .then((xmlObject) => {
-          res([{
-            term: {
-              index: Number(xmlObject.StudentClassSchedule[0]['@_TermIndex'][0]),
-              name: xmlObject.StudentClassSchedule[0]['@_TermIndexName'][0],
-            },
-            error: xmlObject.StudentClassSchedule[0]['@_ErrorMessage'][0],
-            today:
-              typeof xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0] !== 'string'
-                ? xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo.map(
-                    (school) => ({
-                      name: school['@_SchoolName'][0],
-                      bellScheduleName: school['@_BellSchedName'][0],
-                      classes:
-                        typeof school.Classes[0] !== 'string'
-                          ? school.Classes[0].ClassInfo.map<ClassScheduleInfo>((course) => ({
-                              period: Number(course['@_Period'][0]),
-                              attendanceCode: course.AttendanceCode[0],
-                              date: {
-                                start: new Date(course['@_StartDate'][0]),
-                                end: new Date(course['@_EndDate'][0]),
-                              },
-                              name: course['@_ClassName'][0],
-                              sectionGu: course['@_SectionGU'][0],
-                              teacher: {
-                                email: course['@_TeacherEmail'][0],
-                                emailSubject: course['@_EmailSubject'][0],
-                                name: course['@_TeacherName'][0],
-                                staffGu: course['@_StaffGU'][0],
-                                url: course['@_TeacherURL'][0],
-                              },
-                              url: course['@_ClassURL'][0],
-                              time: {
-                                start: parse(course['@_StartTime'][0], 'hh:mm a', Date.now()),
-                                end: parse(course['@_EndTime'][0], 'hh:mm a', Date.now()),
-                              },
-                            }))
-                          : [],
-                    })
-                  )
-                : [],
-            classes:
-              typeof xmlObject.StudentClassSchedule[0].ClassLists[0] !== 'string'
-                ? xmlObject.StudentClassSchedule[0].ClassLists[0].ClassListing.map((studentClass) => ({
-                    name: studentClass['@_CourseTitle'][0],
-                    period: Number(studentClass['@_Period'][0]),
-                    room: studentClass['@_RoomName'][0],
-                    sectionGu: studentClass['@_SectionGU'][0],
-                    teacher: {
-                      name: studentClass['@_Teacher'][0],
-                      email: studentClass['@_TeacherEmail'][0],
-                      staffGu: studentClass['@_TeacherStaffGU'][0],
-                    },
-                  }))
-                : [],
-            terms: xmlObject.StudentClassSchedule[0].TermLists[0].TermListing.map((term) => ({
-              date: {
-                start: new Date(term['@_BeginDate'][0]),
-                end: new Date(term['@_EndDate'][0]),
-              },
-              index: Number(term['@_TermIndex'][0]),
-              name: term['@_TermName'][0],
-              schoolYearTermCodeGu: term['@_SchoolYearTrmCodeGU'][0],
-            })),
-          },
+        .then((xmlObject:any) => {
+          var response:any={}
+          response.termName=xmlObject.StudentClassSchedule[0]['@_TermIndexName'][0]; //could sometimes be strings but fuck that
+          response.termIndex=xmlObject.StudentClassSchedule[0]['@_TermIndex'][0];
+          //for now we're not grabbing the terms for the conccurent school, they lowk don't matter
+          response.terms=xmlObject.StudentClassSchedule[0].TermLists[0].TermListing.map((term:any)=>({start:term['@_BeginDate'][0],end:term['@_EndDate'][0],termIndex:term['@_TermIndex'][0],termName:term['@_TermName'][0]}))
+          
+          response.mainClasses=xmlObject.StudentClassSchedule[0].ClassLists[0].map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
+       
+          var checker=false;
+          try{
+            checker=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].
+            ConSchClassLists[0].classListing[0]!=''
+            
+          }catch{}
+
+          
+          if(checker){
+            response.conClasses=  response.mainClasses=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].classListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
+       
+          }
+          
+          if(xmlObject.TodayScheduleInfoData!=''){
+            response.today={}
+            response.today.main=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[0].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
+            try{
+              response.today.con=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
+          
+            }catch{}
+          
+          }
+          res([response,xmlObject.extraData])
+          }
+
           //@ts-ignore
-        xmlObject.extraData]
-        );
-        })
+
+        )
         .catch(rej);
     });
   }

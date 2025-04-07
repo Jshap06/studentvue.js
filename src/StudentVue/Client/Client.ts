@@ -215,18 +215,18 @@ export default class Client extends soap.Client {
           //for now we're not grabbing the terms for the conccurent school, they lowk don't matter
           response.terms=xmlObject.StudentClassSchedule[0].TermLists[0].TermListing.map((term:any)=>({start:term['@_BeginDate'][0],end:term['@_EndDate'][0],termIndex:term['@_TermIndex'][0],termName:term['@_TermName'][0]}))
           
-          response.mainClasses=xmlObject.StudentClassSchedule[0].ClassListing[0].map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
+          response.mainClasses=xmlObject.StudentClassSchedule[0].ClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
        
           var checker=false;
           try{
             checker=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].
-            ConSchClassLists[0].ClassListing[0]!=''
+            ConSchClassLists[0].ClassLists[0].ClassListing!=''
             
           }catch{}
 
           
           if(checker){
-            response.conClasses=  response.mainClasses=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].classListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
+            response.conClasses=  response.mainClasses=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
        
           }
           

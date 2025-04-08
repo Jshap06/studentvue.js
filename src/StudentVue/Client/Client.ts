@@ -216,7 +216,6 @@ export default class Client extends soap.Client {
           response.terms=xmlObject.StudentClassSchedule[0].TermLists[0].TermListing.map((term:any)=>({start:term['@_BeginDate'][0],end:term['@_EndDate'][0],termIndex:term['@_TermIndex'][0],termName:term['@_TermName'][0]}))
           
           response.mainClasses=xmlObject.StudentClassSchedule[0].ClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
-       
           var checker=false;
           try{
             checker=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].
@@ -226,8 +225,8 @@ export default class Client extends soap.Client {
 
           
           if(checker){
-            response.conClasses=  response.mainClasses=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
-       
+            response.conClasses=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
+            response.conClasses.conName=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0]['@_SchoolName']
           }
           
           if(xmlObject.TodayScheduleInfoData!=''){
@@ -235,7 +234,7 @@ export default class Client extends soap.Client {
             response.today.main=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[0].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
             try{
               response.today.con=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
-          
+              response.today.con.name=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].Schoolinfo[1]['@_SchoolName'];
             }catch{}
           
           }

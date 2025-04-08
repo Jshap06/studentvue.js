@@ -220,7 +220,7 @@ export default class Client extends soap.Client {
           var checker=false;
           try{
             checker=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].
-            ConSchClassLists[0].ClassLists[0].ClassListing!=''
+            ConSchClassLists[0].ClassListing[0]!=''
             
           }catch{}
 

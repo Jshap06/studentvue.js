@@ -342,8 +342,8 @@ export default class Client extends soap.Client {
             methodName: 'Gradebook',
             paramStr: {
               childIntId: 0,
-              ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
-              ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {})
+              ...(reportingPeriodIndex != undefined ? { ReportPeriod: reportingPeriodIndex } : {}),
+              ...(orgYearGu != undefined ? { ConcurrentSchOrgYearGU: orgYearGu } : {})
             },
           },
           (xml) =>
@@ -527,15 +527,15 @@ export default class Client extends soap.Client {
 
   //altnerate method for studentInfo when studentInfo fails:
   //those things commented out are not applicable here
-  public ChildList():Promise<[StudentInfo,any]>{
-    return new Promise<[StudentInfo,any]>((res,rej)=>{
+  public ChildList():Promise<[any,any]>{
+    return new Promise<[any,any]>((res,rej)=>{
       super
         .processRequest({methodName:"ChildList"})
           .then((xmlObject:any)=>{
             const raw=xmlObject;
             xmlObject=xmlObject.ChildList[0];
 
-            res([{
+            var response:any={
             student:{
               name:xmlObject.Child[0].ChildName, //full Name on this fallback method
               lastName:"not available",
@@ -559,7 +559,14 @@ export default class Client extends soap.Client {
 
 
 
-          } as StudentInfo,raw.extraData])})
+          } 
+try{
+          response.conSchools=xmlObject.Child[0].ConcurrentSchools.map((school:any)=>({'name':school[0]['@_ConSchoolName'][0],identifier:school[0]['@_ConOrgYearGU'][0]}))
+}
+catch{}
+        res([response,xmlObject.extraData])})
+
+
           .catch(rej)
     })
   }

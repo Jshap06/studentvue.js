@@ -13,7 +13,7 @@ import { Gradebook } from './Client/Client.interfaces';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export function login(districtUrl: string, credentials: UserCredentials,proxyUrl:string="https://studentvuelib.up.railway.app"): Promise<[Client,Gradebook,any]> {
+export function login(districtUrl: string, credentials: UserCredentials,proxyUrl:string="https://studentvuelib.up.railway.app"): Promise<[Client,any,[any,any]]> {
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
@@ -37,15 +37,26 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
         res([client,...response]);
       })
       .catch(rej);
-/*
+
     const p1=client.gradebook();
     const p2=client.ChildList();
     Promise.all([p1,p2]).then(all=>{
-      const [grades,info]=all
-      if(info.)
+      const [[grades],[info]]=all
+      const gradebooks:any={main:{response:all[0],name:info.currentSchool,identifer:undefined},conSchools:[]}
+      if(info.conSchools){
+        for(let school of info.conSchools){
+          const p3=client.gradebook(undefined,school.identifier).then((response)=>{
+            gradebooks.conSchools.push({response:response,name:school.name,identifier:school.identifier})
+          }).catch();
+        }
+        res([client,gradebooks,all[1]])
+      }
+      else{
+        res([client,{main:{response:all[0],name:info.currentSchool,identifer:undefined}},all[1]])
+      }
 
     })
-      */
+      
     
   });
 }

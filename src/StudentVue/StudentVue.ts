@@ -30,13 +30,7 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
       },
       proxyUrl,url
     );
-    client
-      .gradebook()
-      .then((response) => {
-        console.log("immediate login response",response,proxyUrl);
-        res([client,...response]);
-      })
-      .catch(rej);
+
 
     const p1=client.gradebook();
     const p2=client.ChildList();

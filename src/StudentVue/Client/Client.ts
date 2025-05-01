@@ -563,7 +563,7 @@ export default class Client extends soap.Client {
 try{
           response.conSchools=xmlObject.Child[0].ConcurrentSchools.map((school:any)=>({'name':school[0]['@_ConSchoolName'][0],identifier:school[0]['@_ConOrgYearGU'][0]}))
 }
-catch{}
+catch(error){console.log(error)}
         res([response,xmlObject.extraData])})
 
 

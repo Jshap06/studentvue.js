@@ -239,7 +239,7 @@ export default class Client extends soap.Client {
           }
 
           
-          }catch{response.today={}}
+          }catch{response.today=false}
           res([response,xmlObject.extraData])
           }
 

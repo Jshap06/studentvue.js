@@ -235,11 +235,11 @@ export default class Client extends soap.Client {
             try{
               response.today.con=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
               response.today.conName=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].Schoolinfo[1]['@_SchoolName'];
-            }catch{}
+            }catch{console.log("no concurrent")}
           }
 
           
-          }catch{response.today=false}
+          }catch(error){console.log(error);response.today=false}
           res([response,xmlObject.extraData])
           }
 

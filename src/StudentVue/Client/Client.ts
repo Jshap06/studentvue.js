@@ -229,7 +229,7 @@ export default class Client extends soap.Client {
             response.conClasses.conName=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0]['@_SchoolName']
           }
           try{
-          if(xmlObject.TodayScheduleInfoData[0].SchoolInfos[0]!=''){
+          if(xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0]!=''){
             response.today={}
             response.today.main=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[0].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
             try{

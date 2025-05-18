@@ -237,6 +237,9 @@ export default class Client extends soap.Client {
               response.today.conName=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].Schoolinfo[1]['@_SchoolName'];
             }catch{console.log("no concurrent")}
           }
+          else{
+            response.today=false
+          }
 
           
           }catch(error){console.log(error);response.today=false}

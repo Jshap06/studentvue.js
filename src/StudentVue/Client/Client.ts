@@ -388,6 +388,7 @@ export default class Client extends soap.Client {
               })),
             },
             courses: xmlObject.Gradebook[0].Courses[0].Course.map((course:any) => ({
+              courseID: course['@_CourseID']?.[0] ?? "",
               period: Number(course['@_Period'][0]),
               title: he.decode(course['@_Title'][0]),
               room: course['@_Room'][0],

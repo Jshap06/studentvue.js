@@ -1,6 +1,7 @@
 import { SchoolDistrict, UserCredentials } from './StudentVue.interfaces';
 import Client from './Client/Client';
 import { Gradebook } from './Client/Client.interfaces';
+export { Client };
 /** @module StudentVue */
 /**
  * Login to the StudentVUE API
@@ -8,7 +9,10 @@ import { Gradebook } from './Client/Client.interfaces';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export declare function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string): Promise<[Client, Gradebook, any]>;
+export declare function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string): Promise<{
+    client: Client;
+    responses: [Gradebook, any][];
+}>;
 /**
  * Find school districts using a zipcode
  * @param {string} zipCode The zipcode to get a list of schools from

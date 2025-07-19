@@ -29,6 +29,11 @@ export default class Client {
     return this.__password__;
   }
 
+
+  public get proxyUrl():string{
+    return Client.url
+  }
+
   protected get credentials(): LoginCredentials {
     return {
       username: this.username,

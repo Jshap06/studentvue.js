@@ -9,6 +9,7 @@ export default class Client {
     get district(): string;
     get username(): string;
     get password(): string;
+    get proxyUrl(): string;
     protected get credentials(): LoginCredentials;
     constructor(credentials: LoginCredentials, Purl?: string);
     /**

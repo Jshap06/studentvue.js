@@ -5,6 +5,45 @@ import { DistrictListXMLObject } from './StudentVue.xml';
 import RequestException from './RequestException/RequestException';
 import { Gradebook } from './Client/Client.interfaces';
 
+
+//helper function fuck y'all goofy ahh
+
+async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradebook,any][]>{
+
+    const periods=localStorage.getItem("mps");
+    if(!periods){
+        //cacheLoading
+        const result=await client.gradebook()
+    //    setLock(true);
+        const periods=result[0].reportingPeriod.available.map(({ name, index, date }) => ({
+			name:name,
+			date:date,
+			index: index,
+		}))
+      localStorage.setItem("mps",JSON.stringify(periods))
+      const remainder=await Promise.all(periods.map(mp=>client.gradebook(mp.index)))
+      return [result,...remainder]
+
+
+    }
+    else{
+        const mps:{index:number,date:any}[]=JSON.parse(periods);
+        const result=await Promise.all(mps.map(mp=>client.gradebook(mp.index)))
+        return result;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+export {Client}
+
 /** @module StudentVue */
 
 /**
@@ -13,7 +52,7 @@ import { Gradebook } from './Client/Client.interfaces';
  * @param {UserCredentials} credentials User credentials of the student
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export function login(districtUrl: string, credentials: UserCredentials,proxyUrl:string="https://studentvuelib.up.railway.app"): Promise<[Client,Gradebook,any]> {
+export function login(districtUrl: string, credentials: UserCredentials,proxyUrl:string="https://studentvuelib.up.railway.app"): Promise<{client:Client,responses:[Gradebook,any][]}> {
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
@@ -30,11 +69,10 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
       },
       proxyUrl,url
     );
-    client
-      .gradebook()
+      getGradebooks(client,null,null)
       .then((response) => {
         console.log("immediate login response",response,proxyUrl);
-        res([client,...response]);
+        res({client:client,responses:response});
       })
       .catch(rej);
 /*

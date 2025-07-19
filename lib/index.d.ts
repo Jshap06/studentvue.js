@@ -21,13 +21,17 @@ declare module 'studentvue/StudentVue/StudentVue' {
     import { SchoolDistrict, UserCredentials } from 'studentvue/StudentVue/StudentVue.interfaces';
     import Client from 'studentvue/StudentVue/Client/Client';
     import { Gradebook } from 'studentvue/StudentVue/Client/Client.interfaces';
+    export { Client };
     /**
         * Login to the StudentVUE API
         * @param {string} districtUrl The URL of the district which can be found using `findDistricts()` method
         * @param {UserCredentials} credentials User credentials of the student
         * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
         */
-    export function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string): Promise<[Client, Gradebook, any]>;
+    export function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string): Promise<{
+            client: Client;
+            responses: [Gradebook, any][];
+    }>;
     /**
         * Find school districts using a zipcode
         * @param {string} zipCode The zipcode to get a list of schools from
@@ -2010,6 +2014,7 @@ declare module 'studentvue/utils/soap/Client/Client' {
         get district(): string;
         get username(): string;
         get password(): string;
+        get proxyUrl(): string;
         protected get credentials(): LoginCredentials;
         constructor(credentials: LoginCredentials, Purl?: string);
         /**

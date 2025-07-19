@@ -5,18 +5,38 @@ import Message from '../Message/Message';
 import { Calendar, CalendarOptions } from './Interfaces/Calendar';
 import { Gradebook } from './Interfaces/Gradebook';
 import { Attendance } from './Interfaces/Attendance';
-import { Schedule } from './Client.interfaces';
 import ReportCard from '../ReportCard/ReportCard';
 import Document from '../Document/Document';
 /**
+ * TO DO; rewrite the studentInfo stuff to primary ChildList with studentInfo as the fallback,
+ * make the type REQUIRE the info about school concurrency, thusly, the login function will determine it in the immediate by concurrenrtly performing the fetches
+ * to thusly have a minimal speed impact
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  * The StudentVUE Client to access the API
  * @constructor
  * @extends {soap.Client}
  */
 export default class Client extends soap.Client {
     private hostUrl;
-    encrypted: boolean;
-    constructor(credentials: LoginCredentials, hostUrl: string, encrypted: boolean);
+    constructor(credentials: LoginCredentials, proxyUrl: string, hostUrl: string);
     /**
      * Validate's the user's credentials. It will throw an error if credentials are incorrect
      */
@@ -32,7 +52,7 @@ export default class Client extends soap.Client {
      * const base64collection = files.map((file) => file.base64);
      * ```
      */
-    documents(): Promise<Document[]>;
+    documents(): Promise<[Document[], any]>;
     /**
      * Gets a list of report cards
      * @returns {Promise<ReportCard[]>} Returns a list of report cards that can fetch a file
@@ -43,7 +63,7 @@ export default class Client extends soap.Client {
      * const base64arr = files.map((file) => file.base64); // ["JVBERi0...", "dUIoa1...", ...];
      * ```
      */
-    reportCards(): Promise<ReportCard[]>;
+    reportCards(): Promise<[ReportCard[], any]>;
     /**
      * Gets the student's school's information
      * @returns {Promise<SchoolInfo>} Returns the information of the student's school
@@ -56,7 +76,7 @@ export default class Client extends soap.Client {
      * })
      * ```
      */
-    schoolInfo(): Promise<SchoolInfo>;
+    schoolInfo(): Promise<[SchoolInfo, any]>;
     /**
      * Gets the schedule of the student
      * @param {number} termIndex The index of the term.
@@ -66,7 +86,7 @@ export default class Client extends soap.Client {
      * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
      * ```
      */
-    schedule(termIndex?: number): Promise<Schedule>;
+    schedule(termIndex?: number): Promise<[any, any]>;
     /**
      * Returns the attendance of the student
      * @returns {Promise<Attendance>} Returns an Attendance object
@@ -76,7 +96,7 @@ export default class Client extends soap.Client {
      *  .then(console.log); // -> { type: 'Period', period: {...}, schoolName: 'University High School', absences: [...], periodInfos: [...] }
      * ```
      */
-    attendance(): Promise<Attendance>;
+    attendance(): Promise<[Attendance, any]>;
     /**
      * Returns the gradebook of the student
      * @param {number} reportingPeriodIndex The timeframe that the gradebook should return
@@ -90,7 +110,7 @@ export default class Client extends soap.Client {
      * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
      * ```
      */
-    gradebook(reportingPeriodIndex?: number): Promise<Gradebook>;
+    gradebook(reportingPeriodIndex?: number, orgYearGu?: string): Promise<[Gradebook, any]>;
     /**
      * Get a list of messages of the student
      * @returns {Promise<Message[]>} Returns an array of messages of the student
@@ -99,7 +119,8 @@ export default class Client extends soap.Client {
      * await client.messages(); // -> [{ id: 'E972F1BC-99A0-4CD0-8D15-B18968B43E08', type: 'StudentActivity', ... }, { id: '86FDA11D-42C7-4249-B003-94B15EB2C8D4', type: 'StudentActivity', ... }]
      * ```
      */
-    messages(): Promise<Message[]>;
+    messages(): Promise<[Message[], any]>;
+    ChildList(): Promise<[StudentInfo, any]>;
     /**
      * Gets the info of a student
      * @returns {Promise<StudentInfo>} StudentInfo object
@@ -108,7 +129,7 @@ export default class Client extends soap.Client {
      * studentInfo().then(console.log) // -> { student: { name: 'Evan Davis', nickname: '', lastName: 'Davis' }, ...}
      * ```
      */
-    studentInfo(): Promise<StudentInfo>;
+    studentInfo(): Promise<[StudentInfo, any]>;
     private fetchEventsWithinInterval;
     /**
      *

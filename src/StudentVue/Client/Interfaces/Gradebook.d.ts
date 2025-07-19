@@ -78,6 +78,10 @@ export declare interface Course {
    */
   period: number;
 
+
+  courseID:string;
+
+
   /**
    * The title of the course
    */

@@ -17,15 +17,15 @@ export default class Client {
   private readonly isParent: number;
   encrypted: boolean;
 
-  private get district(): string {
+  public get district(): string {
     return this.__district__;
   }
 
-  private get username(): string {
+  public get username(): string {
     return this.__username__;
   }
 
-  private get password(): string {
+  public get password(): string {
     return this.__password__;
   }
 

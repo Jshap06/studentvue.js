@@ -20,13 +20,14 @@ declare module 'studentvue' {
 declare module 'studentvue/StudentVue/StudentVue' {
     import { SchoolDistrict, UserCredentials } from 'studentvue/StudentVue/StudentVue.interfaces';
     import Client from 'studentvue/StudentVue/Client/Client';
+    import { Gradebook } from 'studentvue/StudentVue/Client/Client.interfaces';
     /**
         * Login to the StudentVUE API
         * @param {string} districtUrl The URL of the district which can be found using `findDistricts()` method
         * @param {UserCredentials} credentials User credentials of the student
         * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
         */
-    export function login(districtUrl: string, credentials: UserCredentials, encrypted?: boolean): Promise<Client>;
+    export function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string): Promise<[Client, Gradebook, any]>;
     /**
         * Find school districts using a zipcode
         * @param {string} zipCode The zipcode to get a list of schools from
@@ -175,17 +176,37 @@ declare module 'studentvue/StudentVue/Client/Client' {
     import { Calendar, CalendarOptions } from 'studentvue/StudentVue/Client/Interfaces/Calendar';
     import { Gradebook } from 'studentvue/StudentVue/Client/Interfaces/Gradebook';
     import { Attendance } from 'studentvue/StudentVue/Client/Interfaces/Attendance';
-    import { Schedule } from 'studentvue/StudentVue/Client/Client.interfaces';
     import ReportCard from 'studentvue/StudentVue/ReportCard/ReportCard';
     import Document from 'studentvue/StudentVue/Document/Document';
     /**
+        * TO DO; rewrite the studentInfo stuff to primary ChildList with studentInfo as the fallback,
+        * make the type REQUIRE the info about school concurrency, thusly, the login function will determine it in the immediate by concurrenrtly performing the fetches
+        * to thusly have a minimal speed impact
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
+        *
         * The StudentVUE Client to access the API
         * @constructor
         * @extends {soap.Client}
         */
     export default class Client extends soap.Client {
-            encrypted: boolean;
-            constructor(credentials: LoginCredentials, hostUrl: string, encrypted: boolean);
+            constructor(credentials: LoginCredentials, proxyUrl: string, hostUrl: string);
             /**
                 * Validate's the user's credentials. It will throw an error if credentials are incorrect
                 */
@@ -201,7 +222,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * const base64collection = files.map((file) => file.base64);
                 * ```
                 */
-            documents(): Promise<Document[]>;
+            documents(): Promise<[Document[], any]>;
             /**
                 * Gets a list of report cards
                 * @returns {Promise<ReportCard[]>} Returns a list of report cards that can fetch a file
@@ -212,7 +233,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * const base64arr = files.map((file) => file.base64); // ["JVBERi0...", "dUIoa1...", ...];
                 * ```
                 */
-            reportCards(): Promise<ReportCard[]>;
+            reportCards(): Promise<[ReportCard[], any]>;
             /**
                 * Gets the student's school's information
                 * @returns {Promise<SchoolInfo>} Returns the information of the student's school
@@ -225,7 +246,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * })
                 * ```
                 */
-            schoolInfo(): Promise<SchoolInfo>;
+            schoolInfo(): Promise<[SchoolInfo, any]>;
             /**
                 * Gets the schedule of the student
                 * @param {number} termIndex The index of the term.
@@ -235,7 +256,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
                 * ```
                 */
-            schedule(termIndex?: number): Promise<Schedule>;
+            schedule(termIndex?: number): Promise<[any, any]>;
             /**
                 * Returns the attendance of the student
                 * @returns {Promise<Attendance>} Returns an Attendance object
@@ -245,7 +266,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 *  .then(console.log); // -> { type: 'Period', period: {...}, schoolName: 'University High School', absences: [...], periodInfos: [...] }
                 * ```
                 */
-            attendance(): Promise<Attendance>;
+            attendance(): Promise<[Attendance, any]>;
             /**
                 * Returns the gradebook of the student
                 * @param {number} reportingPeriodIndex The timeframe that the gradebook should return
@@ -259,7 +280,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
                 * ```
                 */
-            gradebook(reportingPeriodIndex?: number): Promise<Gradebook>;
+            gradebook(reportingPeriodIndex?: number, orgYearGu?: string): Promise<[Gradebook, any]>;
             /**
                 * Get a list of messages of the student
                 * @returns {Promise<Message[]>} Returns an array of messages of the student
@@ -268,7 +289,8 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * await client.messages(); // -> [{ id: 'E972F1BC-99A0-4CD0-8D15-B18968B43E08', type: 'StudentActivity', ... }, { id: '86FDA11D-42C7-4249-B003-94B15EB2C8D4', type: 'StudentActivity', ... }]
                 * ```
                 */
-            messages(): Promise<Message[]>;
+            messages(): Promise<[Message[], any]>;
+            ChildList(): Promise<[StudentInfo, any]>;
             /**
                 * Gets the info of a student
                 * @returns {Promise<StudentInfo>} StudentInfo object
@@ -277,7 +299,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * studentInfo().then(console.log) // -> { student: { name: 'Evan Davis', nickname: '', lastName: 'Davis' }, ...}
                 * ```
                 */
-            studentInfo(): Promise<StudentInfo>;
+            studentInfo(): Promise<[StudentInfo, any]>;
             /**
                 *
                 * @param {CalendarOptions} options Options to provide for calendar method. An interval is required.
@@ -442,6 +464,8 @@ declare module 'studentvue/StudentVue/StudentVue.interfaces' {
             * The student's password
             */
         password: string;
+    
+        encrypted:boolean
     }
 }
 
@@ -531,6 +555,8 @@ declare module 'studentvue/utils/soap/Client/Client.interfaces' {
             * The student's district URL
             */
         districtUrl: string;
+    
+        encrypted:boolean;
     }
     
     export interface ParsedRequestResult {
@@ -800,6 +826,7 @@ declare module 'studentvue/StudentVue/Client/Interfaces/Gradebook' {
             */
         type: string;
     
+        gradingScale?:any;
         /**
             * The reporting time period of the gradebook
             */
@@ -861,6 +888,10 @@ declare module 'studentvue/StudentVue/Client/Interfaces/Gradebook' {
             * The period number of the course
             */
         period: number;
+    
+    
+        courseID:string;
+    
     
         /**
             * The title of the course
@@ -1975,9 +2006,12 @@ declare module 'studentvue/StudentVue/Client/Interfaces/SchoolInfo' {
 declare module 'studentvue/utils/soap/Client/Client' {
     import { RequestOptions, LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     export default class Client {
-        encrypted: any;
+        encrypted: boolean;
+        get district(): string;
+        get username(): string;
+        get password(): string;
         protected get credentials(): LoginCredentials;
-        constructor(credentials: LoginCredentials);
+        constructor(credentials: LoginCredentials, Purl?: string);
         /**
           * Create a POST request to synergy servers to fetch data
           * @param options Options to provide when making a XML request to the servers
@@ -2009,7 +2043,7 @@ declare module 'studentvue/utils/soap/Client/Client' {
       </soap:Envelope>
           * ```
           */
-        protected processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
+        processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
         static processAnonymousRequest<T extends object | undefined>(url: string, options?: Partial<RequestOptions>, preparse?: (xml: string) => string): Promise<T>;
     }
 }

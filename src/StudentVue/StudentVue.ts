@@ -8,6 +8,15 @@ import { Gradebook } from './Client/Client.interfaces';
 
 //helper function fuck y'all goofy ahh
 
+function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
+  try{
+    return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>res(grades)).catch(error=>rej(error)))
+  }catch(error){console.log(error,"dexter morgan");
+    return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>res(grades)).catch(error=>rej(error)))
+  }
+}
+
+
 async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradebook,any][]>{
 
     const periods=localStorage.getItem("mps");
@@ -21,14 +30,14 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 			index: index,
 		}))
       localStorage.setItem("mps",JSON.stringify(periods))
-      const remainder=await Promise.all(periods.map(mp=>client.gradebook(mp.index)))
+      const remainder=await Promise.all(periods.map(mp=>stupid(client,mp)))
       return [result,...remainder]
 
 
     }
     else{
         const mps:{index:number,date:any}[]=JSON.parse(periods);
-        const result=await Promise.all(mps.map(mp=>client.gradebook(mp.index)))
+        const result=await Promise.all(mps.map(mp=>stupid(client,mp)))
         return result;
     }
 

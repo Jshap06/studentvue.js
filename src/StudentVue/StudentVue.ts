@@ -19,7 +19,7 @@ function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
 
 async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradebook,any][]>{
 
-    const periods=localStorage.getItem("mps");
+    const periods=false; //localStorage.getItem("mps");
     if(!periods){
         //cacheLoading
         const result=await client.gradebook()

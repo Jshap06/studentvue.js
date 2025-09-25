@@ -19,8 +19,9 @@ function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
 
 async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradebook,any][]>{
 
-    const periods=false; //localStorage.getItem("mps");
-    if(!periods){
+    const info=JSON.parse(localStorage.getItem("mps") ?? "");
+    const periods=info.periods
+    if(!(periods.length>0)||info.district!=client.district){
         //cacheLoading
         const result=await client.gradebook()
     //    setLock(true);
@@ -29,7 +30,7 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 			date:date,
 			index: index,
 		}))
-      localStorage.setItem("mps",JSON.stringify(periods))
+      localStorage.setItem("mps",JSON.stringify({periods:periods,district:client.district}))
       const remainder=await Promise.all(periods.map(mp=>stupid(client,mp)))
       return [result,...remainder]
 

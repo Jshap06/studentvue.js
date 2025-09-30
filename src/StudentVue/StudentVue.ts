@@ -31,13 +31,13 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 			index: index,
 		}))
       localStorage.setItem("mps",JSON.stringify({periods:periods,district:client.district}))
-      const remainder=await Promise.all(periods.map(mp=>stupid(client,mp)))
-      return [result,...remainder]
+      const remainder:typeof result[]=await Promise.all(periods.map(mp=>{if(result[0].reportingPeriod.current.index==mp.index){return new Promise<typeof result>((res,rej)=>{res(result)})}else{return stupid(client,mp)}}))
+      return [...remainder]
 
 
     }
     else{
-        const mps:{index:number,date:any}[]=JSON.parse(periods);
+        const mps:{index:number,date:any}[]=periods;
         const result=await Promise.all(mps.map(mp=>stupid(client,mp)))
         return result;
     }

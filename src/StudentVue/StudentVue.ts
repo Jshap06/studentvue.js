@@ -5,24 +5,31 @@ import { DistrictListXMLObject } from './StudentVue.xml';
 import RequestException from './RequestException/RequestException';
 import { Gradebook } from './Client/Client.interfaces';
 
+interface LongTerm{
+    identifier /*district URL + marking period index*/ : {data:Gradebook,age:number}
+}
 
 //helper function fuck y'all goofy ahh
 
-function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
-  try{
-    return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>res(grades)).catch(error=>rej(error)))
-  }catch(error){console.log(error,"dexter morgan");
-    return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>res(grades)).catch(error=>rej(error)))
+function stupid(client:Client,mp:any,fetchCache:any):Promise<[Gradebook,any]>{
+  const clientIdentifier=client.district+client.username;
+  if(fetchCache[clientIdentifier+mp.index.toString()]){
+    if(Math.abs(fetchCache[clientIdentifier+mp.index.toString()].age-Date.now())<1000*60*60*24*3){
+    return new Promise((res,rej)=>res(fetchCache[clientIdentifier+mp.index.toString()].data))
+    }
   }
+
+    try{
+      return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>{fetchCache[clientIdentifier+mp.index]={data:grades,age:Date.now()};res(grades)}).catch(error=>rej(error)))
+    }catch(error){console.log(error,"dexter morgan");
+      return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>{fetchCache[clientIdentifier+mp.index]={data:grades,age:Date.now()};res(grades)}).catch(error=>rej(error)))
+    }
+  
 }
 
-
+//always pull the current one from most recent data
+//pull the others from cache. update cache when its fetched explicitly. 
 async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradebook,any][]>{
-
-    const info=JSON.parse(localStorage.getItem("mps") ?? "{}");
-    const periods=info.periods
-    if(!(periods?.length>0)||info.district!=client.district){
-        //cacheLoading
         const result=await client.gradebook()
     //    setLock(true);
         const periods=result[0].reportingPeriod.available.map(({ name, index, date }) => ({
@@ -30,19 +37,16 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 			date:date,
 			index: index,
 		}))
-      localStorage.setItem("mps",JSON.stringify({periods:periods,district:client.district}))
-      const remainder:typeof result[]=await Promise.all(periods.map(mp=>{if(result[0].reportingPeriod.current.index==mp.index){return new Promise<typeof result>((res,rej)=>{res(result)})}else{return stupid(client,mp)}}))
+      const fetchCache=JSON.parse(localStorage.getItem("fetchCache") ?? "{}");
+      const remainder:typeof result[]=await Promise.all(periods.map(mp=>{if(result[0].reportingPeriod.current.index==mp.index){return new Promise<typeof result>((res,rej)=>{res(result)})}else{return stupid(client,mp,fetchCache)}}))
+      localStorage.setItem("fetchCache",JSON.stringify(fetchCache))
       return [...remainder]
 
 
     }
-    else{
-        const mps:{index:number,date:any}[]=periods;
-        const result=await Promise.all(mps.map(mp=>stupid(client,mp)))
-        return result;
-    }
 
-}
+
+
 
 
 

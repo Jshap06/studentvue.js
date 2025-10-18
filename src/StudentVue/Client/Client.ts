@@ -497,8 +497,10 @@ export default class Client extends soap.Client {
 
       
     
-      const fetchBranch = ()=>{   
-        return   super.processRequest<GradebookXMLObject&{extraData?:any}>(
+      const fetchBranch = ():Promise<GradebookXMLObject>=>{   
+        return  new Promise((res2,rej2)=>{        
+      
+          super.processRequest<GradebookXMLObject&{extraData?:any}>(
           {
             methodName: 'Gradebook',
             paramStr: {
@@ -512,7 +514,12 @@ export default class Client extends soap.Client {
               .encodeAttribute('MeasureDescription', 'HasDropBox')
               .encodeAttribute('Measure', 'Type')
               .toString()
-        )}
+              //@ts-ignore
+        ).then((result:GradebookXMLObject)=>res2(result)).catch(err=>rej2(err))})
+        
+
+      
+      }
 
       if(fresh||reportingPeriodIndex==null){
         fetchBranch().then(result=>parseBranch(result)).catch(err=>rej(err))
@@ -522,7 +529,7 @@ export default class Client extends soap.Client {
           const identifier=this.district+this.username+reportingPeriodIndex
           if(m[identifier]){
             if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh 
-                      fetchBranch().then(result=>{
+                      fetchBranch().then((result)=>{
                         
                       const xmlCache:xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}");
                       const identifier=this.district+this.username+reportingPeriodIndex

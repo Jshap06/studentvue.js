@@ -10,7 +10,7 @@ import { eachMonthOfInterval, parse } from 'date-fns';
 import { FileResourceXMLObject, GradebookXMLObject, URLResourceXMLObject } from './Interfaces/xml/Gradebook';
 import { AttendanceXMLObject } from './Interfaces/xml/Attendance';
 import EventType from '../../Constants/EventType';
-import _ from 'lodash';
+import _, { result } from 'lodash';
 import { Assignment, FileResource, Gradebook, Mark, URLResource, WeightedCategory } from './Interfaces/Gradebook';
 import ResourceType from '../../Constants/ResourceType';
 import { AbsentPeriod, Attendance, PeriodInfo } from './Interfaces/Attendance';
@@ -497,32 +497,35 @@ export default class Client extends soap.Client {
 
       
     
-      const fetchBranch = ():Promise<GradebookXMLObject>=>{   
-        return  new Promise((res2,rej2)=>{        
-      
-          super.processRequest<GradebookXMLObject&{extraData?:any}>(
-          {
-            methodName: 'Gradebook',
-            paramStr: {
-              childIntId: 0,
-              ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
-              ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {})
-            },
-          },
-          (xml) =>
-            new XMLFactory(xml)
-              .encodeAttribute('MeasureDescription', 'HasDropBox')
-              .encodeAttribute('Measure', 'Type')
-              .toString()
-              //@ts-ignore
-        ).then((result:GradebookXMLObject)=>res2(result)).catch(err=>rej2(err))})
-        
+  const fetchBranch = (): Promise<GradebookXMLObject> => {
+  return super
+    .processRequest<GradebookXMLObject & { extraData?: any }>(
+      {
+        methodName: 'Gradebook',
+        paramStr: {
+          childIntId: 0,
+          ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
+          ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {}),
+        },
+      },
+      (xml) =>
+        new XMLFactory(xml)
+          .encodeAttribute('MeasureDescription', 'HasDropBox')
+          .encodeAttribute('Measure', 'Type')
+          .toString()
+    )
+    .then((result) => {
+      console.log("josh stewart");
+      return result;
+    });
+};
+
 
       
-      }
 
       if(fresh||reportingPeriodIndex==null){
-        fetchBranch().then(result=>parseBranch(result)).catch(err=>rej(err))
+        console.log("what the fuck guys")
+        fetchBranch().then(result=>{console.log("boston");parseBranch(result)}).catch(err=>rej(err))
       }   
         else{
           const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
@@ -530,16 +533,20 @@ export default class Client extends soap.Client {
           if(m[identifier]){
             if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh 
                       fetchBranch().then((result)=>{
-                        
-                      const xmlCache:xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}");
-                      const identifier=this.district+this.username+reportingPeriodIndex
-                      xmlCache[identifier]={data:result,age:Date.now()}
-                      localStorage.setItem("xmlCache",JSON.stringify(xmlCache))
+                      m[identifier]={data:result,age:Date.now()}
+                      localStorage.setItem("xmlCache",JSON.stringify(m))
                       parseBranch(result)}).catch(err=>rej(err))
             }
             else{
                 parseBranch(m[identifier].data)
             }
+          }else{
+            fetchBranch().then(result=>{
+              const xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
+              xmlCache[identifier]={data:result,age:Date.now()}
+              localStorage.setItem("xmlCache",xmlCache)
+              parseBranch(result)
+            })
           }
 
         }

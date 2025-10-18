@@ -23,7 +23,7 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 
     const info=JSON.parse(localStorage.getItem("mps") ?? "{}");
     const periods=info.periods
-    if(!(periods?.length>0)||info.district!=client.district){
+    if(!(periods?.length>0)||info.district!=client.district||true){
         //cacheLoading
         const result=await client.gradebook()
     //    setLock(true);

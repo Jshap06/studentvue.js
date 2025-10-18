@@ -10,9 +10,11 @@ import { Gradebook } from './Client/Client.interfaces';
 
 function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
   try{
-    return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>res(grades)).catch(error=>rej(error)))
+    //@ts-ignore
+    return new Promise((res,rej)=>client.gradebook(mp.index,null,false).then(grades=>res(grades)).catch(error=>rej(error)))
   }catch(error){console.log(error,"dexter morgan");
-    return new Promise((res,rej)=>client.gradebook(mp.index).then(grades=>res(grades)).catch(error=>rej(error)))
+    //@ts-ignore
+    return new Promise((res,rej)=>client.gradebook(mp.index,null,false).then(grades=>res(grades)).catch(error=>rej(error)))
   }
 }
 

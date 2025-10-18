@@ -497,8 +497,8 @@ export default class Client extends soap.Client {
 
       
     
-      const fetchBranch = ()=>{   return   super
-        .processRequest<GradebookXMLObject&{extraData?:any}>(
+      const fetchBranch = ()=>{   
+        return   super.processRequest<GradebookXMLObject&{extraData?:any}>(
           {
             methodName: 'Gradebook',
             paramStr: {

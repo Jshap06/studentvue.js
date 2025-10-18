@@ -26,6 +26,7 @@ import XMLFactory from '../../utils/XMLFactory/XMLFactory';
 import cache from '../../utils/cache/cache';
 import { optional, asyncPoolAll } from './Client.helpers';
 import he from "he";
+import { el, id } from 'date-fns/locale';
 
 /**
  * TO DO; rewrite the studentInfo stuff to primary ChildList with studentInfo as the fallback, 
@@ -50,10 +51,19 @@ import he from "he";
  * 
  * 
  * 
+ * 
  * The StudentVUE Client to access the API
  * @constructor
  * @extends {soap.Client}
  */
+
+
+
+interface xmlCache{
+  [identifier:string] /*district url + username + mp */ : {data:GradebookXMLObject,age:number}
+}
+
+
 export default class Client extends soap.Client {
   private hostUrl: string;
   constructor(credentials: LoginCredentials, proxyUrl:string,hostUrl: string) {
@@ -339,8 +349,10 @@ export default class Client extends soap.Client {
    * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
    * ```
    */
-  public gradebook(reportingPeriodIndex?: number,orgYearGu?:string): Promise<[Gradebook,any]> {
+  public gradebook(reportingPeriodIndex?: number,orgYearGu?:string, fresh=true): Promise<[Gradebook,any]> {
     return new Promise((res, rej) => {
+      let x:any=false;
+       const mainBranch = () => {
       super
         .processRequest<GradebookXMLObject&{extraData?:any}>(
           {
@@ -358,6 +370,13 @@ export default class Client extends soap.Client {
               .toString()
         )
         .then((xmlObject: GradebookXMLObject | any) => {
+          if(x){xmlObject=x}
+          else if(reportingPeriodIndex!=null){
+            const xmlCache:xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}");
+            const identifier=this.district+this.username+reportingPeriodIndex
+            xmlCache[identifier]={data:xmlObject,age:Date.now()}
+            localStorage.setItem("xmlCache",JSON.stringify(xmlCache))
+          }
           try{
             if (xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("The user name or password is incorrect")||xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("Invalid user id or password")) {rej(new Error("Invalid/Incorrect Username or Password"));}
             else{rej(new RequestException(xmlObject))};}
@@ -495,9 +514,29 @@ export default class Client extends soap.Client {
         xmlObject.extraData]
         );}
         })
-        .catch(rej);
+        .catch(rej);}
+    
+      if(fresh||reportingPeriodIndex==null){
+        mainBranch()
+      }   
+        else{
+          const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
+          const identifier=this.district+this.username+reportingPeriodIndex
+          if(m[identifier]){
+            if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh 
+              mainBranch()
+            }
+            else{
+                x=m[identifier].data
+                mainBranch()
+            }
+          }
+
+        }
     });
   }
+
+
 
   /**
    * Get a list of messages of the student

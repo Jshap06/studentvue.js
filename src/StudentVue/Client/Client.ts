@@ -544,7 +544,7 @@ export default class Client extends soap.Client {
             fetchBranch().then(result=>{
               const xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
               xmlCache[identifier]={data:result,age:Date.now()}
-              localStorage.setItem("xmlCache",xmlCache)
+              localStorage.setItem("xmlCache",JSON.stringify(xmlCache))
               parseBranch(result)
             })
           }

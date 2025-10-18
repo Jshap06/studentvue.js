@@ -7,33 +7,6 @@ import { Gradebook } from './Interfaces/Gradebook';
 import { Attendance } from './Interfaces/Attendance';
 import ReportCard from '../ReportCard/ReportCard';
 import Document from '../Document/Document';
-/**
- * TO DO; rewrite the studentInfo stuff to primary ChildList with studentInfo as the fallback,
- * make the type REQUIRE the info about school concurrency, thusly, the login function will determine it in the immediate by concurrenrtly performing the fetches
- * to thusly have a minimal speed impact
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- * The StudentVUE Client to access the API
- * @constructor
- * @extends {soap.Client}
- */
 export default class Client extends soap.Client {
     private hostUrl;
     constructor(credentials: LoginCredentials, proxyUrl: string, hostUrl: string);
@@ -110,7 +83,7 @@ export default class Client extends soap.Client {
      * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
      * ```
      */
-    gradebook(reportingPeriodIndex?: number, orgYearGu?: string): Promise<[Gradebook, any]>;
+    gradebook(reportingPeriodIndex?: number, orgYearGu?: string, fresh?: boolean): Promise<[Gradebook, any]>;
     /**
      * Get a list of messages of the student
      * @returns {Promise<Message[]>} Returns an array of messages of the student

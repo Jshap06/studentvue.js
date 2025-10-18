@@ -351,32 +351,12 @@ export default class Client extends soap.Client {
    */
   public gradebook(reportingPeriodIndex?: number,orgYearGu?:string, fresh=true): Promise<[Gradebook,any]> {
     return new Promise((res, rej) => {
-      let x:any=false;
-       const mainBranch = () => {
-      super
-        .processRequest<GradebookXMLObject&{extraData?:any}>(
-          {
-            methodName: 'Gradebook',
-            paramStr: {
-              childIntId: 0,
-              ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
-              ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {})
-            },
-          },
-          (xml) =>
-            new XMLFactory(xml)
-              .encodeAttribute('MeasureDescription', 'HasDropBox')
-              .encodeAttribute('Measure', 'Type')
-              .toString()
-        )
-        .then((xmlObject: GradebookXMLObject | any) => {
-          if(x){xmlObject=x}
-          else if(reportingPeriodIndex!=null){
-            const xmlCache:xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}");
-            const identifier=this.district+this.username+reportingPeriodIndex
-            xmlCache[identifier]={data:xmlObject,age:Date.now()}
-            localStorage.setItem("xmlCache",JSON.stringify(xmlCache))
-          }
+
+
+
+      const parseBranch = (xmlObject: GradebookXMLObject | any) => {
+
+          
           try{
             if (xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("The user name or password is incorrect")||xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("Invalid user id or password")) {rej(new Error("Invalid/Incorrect Username or Password"));}
             else{rej(new RequestException(xmlObject))};}
@@ -513,22 +493,45 @@ export default class Client extends soap.Client {
           } as Gradebook,
         xmlObject.extraData]
         );}
-        })
-        .catch(rej);}
+        }
+
+      
     
+      const fetchBranch = ()=>{   return   super
+        .processRequest<GradebookXMLObject&{extraData?:any}>(
+          {
+            methodName: 'Gradebook',
+            paramStr: {
+              childIntId: 0,
+              ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
+              ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {})
+            },
+          },
+          (xml) =>
+            new XMLFactory(xml)
+              .encodeAttribute('MeasureDescription', 'HasDropBox')
+              .encodeAttribute('Measure', 'Type')
+              .toString()
+        )}
+
       if(fresh||reportingPeriodIndex==null){
-        mainBranch()
+        fetchBranch().then(result=>parseBranch(result)).catch(err=>rej(err))
       }   
         else{
           const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
           const identifier=this.district+this.username+reportingPeriodIndex
           if(m[identifier]){
             if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh 
-              mainBranch()
+                      fetchBranch().then(result=>{
+                        
+                      const xmlCache:xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}");
+                      const identifier=this.district+this.username+reportingPeriodIndex
+                      xmlCache[identifier]={data:result,age:Date.now()}
+                      localStorage.setItem("xmlCache",JSON.stringify(xmlCache))
+                      parseBranch(result)}).catch(err=>rej(err))
             }
             else{
-                x=m[identifier].data
-                mainBranch()
+                parseBranch(m[identifier].data)
             }
           }
 

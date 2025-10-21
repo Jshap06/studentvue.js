@@ -623,7 +623,7 @@ export default class Client extends soap.Client {
 
           }
           if(xmlObject["ConcurrentSchools"]!=''){
-            const l=xmlObject["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"]["@_ConSchoolName"],GU:school["ConcurrentSchool"]["@_ConSchoolName"]["@_ConOrgYearGU"]}))
+            const l=xmlObject["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"][0]["@_ConSchoolName"][0],GU:school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0]}))
           //@ts-ignore
             m.schools=l
           }

@@ -597,7 +597,7 @@ export default class Client extends soap.Client {
             const raw=xmlObject;
             xmlObject=xmlObject.ChildList[0];
 
-            res([{
+            const m = {
             student:{
               name:xmlObject.Child[0].ChildName, //full Name on this fallback method
               lastName:"not available",
@@ -621,7 +621,15 @@ export default class Client extends soap.Client {
 
 
 
-          } as StudentInfo,raw.extraData])})
+          }
+          if(xmlObject["ConcurrentSchools"]!=''){
+            const l=xmlObject["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"]["@_ConSchoolName"],GU:school["ConcurrentSchool"]["@_ConSchoolName"]["@_ConOrgYearGU"]}))
+          //@ts-ignore
+            m.schools=l
+          }
+          
+
+            res([m as StudentInfo,raw.extraData])})
           .catch(rej)
     })
   }

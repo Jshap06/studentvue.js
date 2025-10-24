@@ -349,7 +349,7 @@ export default class Client extends soap.Client {
    * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
    * ```
    */
-  public gradebook(reportingPeriodIndex?: number,orgYearGu?:string, fresh=true): Promise<[Gradebook,any]> {
+ public gradebook(reportingPeriodIndex?: number,orgYearGu?:string, fresh=true): Promise<[Gradebook,any]> {
     return new Promise((res, rej) => {
 
 
@@ -386,7 +386,7 @@ export default class Client extends soap.Client {
                 index: Number(period['@_Index'][0]),
               })),
             },
-            courses: xmlObject.Gradebook[0].Courses[0].Course.map((course:any) => ({
+            courses: typeof xmlObject.Gradebook[0].Courses[0]!='string' ? xmlObject.Gradebook[0].Courses[0].Course.map((course:any) => ({
               courseID: course['@_CourseID']?.[0] ?? "",
               period: Number(course['@_Period'][0]),
               title: he.decode(course['@_Title'][0]),
@@ -489,7 +489,7 @@ export default class Client extends soap.Client {
                       })) as Assignment[])
                     : [],
               }))) as Mark[]:[{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],
-            })),
+            })) : [],
           } as Gradebook,
         xmlObject.extraData]
         );}
@@ -552,7 +552,6 @@ export default class Client extends soap.Client {
         }
     });
   }
-
 
 
   /**

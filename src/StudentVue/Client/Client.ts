@@ -590,6 +590,7 @@ export default class Client extends soap.Client {
   //altnerate method for studentInfo when studentInfo fails:
   //those things commented out are not applicable here
   public ChildList():Promise<[StudentInfo,any]>{
+    console.log("sanity check")
     return new Promise<[StudentInfo,any]>((res,rej)=>{
       super
         .processRequest({methodName:"ChildList"})
@@ -622,12 +623,18 @@ export default class Client extends soap.Client {
 
 
           }
-          if(xmlObject["ConcurrentSchools"]!=''){
-            const l=xmlObject["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"][0]["@_ConSchoolName"][0],GU:school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0]}))
-          //@ts-ignore
+          console.log(xmlObject,"stupid wanker")
+          if(xmlObject.Child[0]["ConcurrentSchools"]){
+            console.log("did we make it here?")
+    
+            var l=xmlObject.Child[0]["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"][0]["@_ConSchoolName"][0],GU:school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0]}))
+          
+           
+            
+            //@ts-ignore
             m.schools=l
           }
-          
+          console.log("how about here?",m)
 
             res([m as StudentInfo,raw.extraData])})
           .catch(rej)

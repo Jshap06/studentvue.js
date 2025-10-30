@@ -624,7 +624,8 @@ export default class Client extends soap.Client {
 
           }
           console.log(xmlObject,"stupid wanker")
-          if(xmlObject.Child[0]["ConcurrentSchools"]){
+          
+          if(xmlObject.Child[0]["ConcurrentSchools"]?.[0]){
             console.log("did we make it here?")
     
             var l=xmlObject.Child[0]["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"][0]["@_ConSchoolName"][0],GU:school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0]}))

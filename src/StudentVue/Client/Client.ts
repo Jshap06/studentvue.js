@@ -525,7 +525,12 @@ export default class Client extends soap.Client {
 
       if(fresh||reportingPeriodIndex==null){
         console.log("what the fuck guys")
-        fetchBranch().then(result=>{console.log("boston");parseBranch(result)}).catch(err=>rej(err))
+        fetchBranch().then(result=>{console.log("boston");
+          const m=JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
+          const identifier=this.district+this.username+reportingPeriodIndex
+          m[identifier]={age:Date.now(),data:result}
+          localStorage.setItem("xmlCache",JSON.stringify(m))
+          parseBranch(result)}).catch(err=>rej(err))
       }   
         else{
           const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache") ?? "{}")

@@ -85,7 +85,7 @@ export default class Client {
    * ```
    */
   
-  public processRequest<T extends object | undefined>(
+  protected processRequest<T extends object | undefined>(
     options: RequestOptions,
     preparse: (xml: string) => string = (xml) => xml
   ): Promise<T> {
@@ -97,7 +97,6 @@ export default class Client {
       paramStr: {},
       ...options,
     };
-    const expressUrl=Client.url;
     return new Promise((res, reject) => {
       const builder = new XMLBuilder({
         ignoreAttributes: false,
@@ -110,7 +109,7 @@ export default class Client {
           '@_xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
           '@_xmlns:soap': 'http://schemas.xmlsoap.org/soap/envelope/',
           'soap:Body': {
-            ProcessWebServiceRequestMultiWeb: {
+            ProcessWebServiceRequest: {
               '@_xmlns': 'http://edupoint.com/webservices/',
               userID: this.username,
               password: this.password,
@@ -121,16 +120,9 @@ export default class Client {
         },
       });
 
-        fetch(expressUrl+"/fulfillAxios",{
-        'method':'POST',
-        'headers':{'Content-Type':'application/json'},
-        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted})
-    })
-        .then(async(response:any) => {
-          const realResponse=await response.json();
-          if(!realResponse.status){return reject(new Error(realResponse.message))}
-          else{var data=realResponse.response}
-          console.log(data);
+      axios
+        .post<string>(this.district, xml, { headers: { 'Content-Type': 'text/xml' } })
+        .then(({ data }) => {
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({
@@ -141,25 +133,21 @@ export default class Client {
             parseTagValue: false,
           });
 
-          const obj: any | ParsedRequestError = parserTwo.parse(
+          const obj: T | ParsedRequestError = parserTwo.parse(
             preparse(
-              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWebResponse.ProcessWebServiceRequestMultiWebResult
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestResponse.ProcessWebServiceRequestResult
             )
           );
 
-          if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj){
-            return reject(new RequestException(obj));}
+          if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj)
+            return reject(new RequestException(obj));
 
-          console.log(JSON.stringify(obj),"captain, my captain")
-         delete realResponse.response;delete realResponse.status;
-         if(Object.keys(realResponse).length>0){
-          obj.extraData=realResponse
-         }
           res(obj as T);
         })
         .catch(reject);
     });
   }
+
 
   private static parseParamStr(input: object): string {
     const builder = new XMLBuilder({

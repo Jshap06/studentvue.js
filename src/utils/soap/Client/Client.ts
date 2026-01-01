@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import {
   ParsedRequestError,
@@ -128,9 +127,21 @@ export default class Client {
         },
       });
 
-      axios
-        .post<string>(this.district, xml, { headers: { 'Content-Type': 'text/xml',"Cookie":"edupointkeyversion="+this.__apiKey__+";" } })
-        .then(({ data }) => {
+      fetch(this.district, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml',
+          'Cookie': 'edupointkeyversion=' + this.__apiKey__ + ';'
+        },
+        body: xml
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.text();
+        })
+        .then((data) => {
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({
@@ -205,9 +216,20 @@ export default class Client {
         },
       });
 
-      axios
-        .post<string>(url, xml, { headers: { 'Content-Type': 'text/xml' } })
-        .then(({ data }:{data:any}) => {
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml'
+        },
+        body: xml
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.text();
+        })
+        .then((data) => {
           const parser = new XMLParser({});
           const result: ParsedRequestResult = parser.parse(data);
           const parserTwo = new XMLParser({ ignoreAttributes: false });

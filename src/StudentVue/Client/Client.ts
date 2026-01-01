@@ -526,20 +526,20 @@ export default class Client extends soap.Client {
       if(fresh||reportingPeriodIndex==null){
         console.log("what the fuck guys")
         fetchBranch().then(result=>{console.log("boston");
-          const m=JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
+          const m=JSON.parse(localStorage.getItem("xmlCache2") ?? "{}")
           const identifier=this.district+this.username+reportingPeriodIndex
           m[identifier]={age:Date.now(),data:result}
-          localStorage.setItem("xmlCache",JSON.stringify(m))
+          localStorage.setItem("xmlCache2",JSON.stringify(m))
           parseBranch(result)}).catch(err=>rej(err))
       }   
         else{
-          const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
+          const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache2") ?? "{}")
           const identifier=this.district+this.username+reportingPeriodIndex
           if(m[identifier]){
             if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh 
                       fetchBranch().then((result)=>{
                       m[identifier]={data:result,age:Date.now()}
-                      localStorage.setItem("xmlCache",JSON.stringify(m))
+                      localStorage.setItem("xmlCache2",JSON.stringify(m))
                       parseBranch(result)}).catch(err=>rej(err))
             }
             else{
@@ -547,9 +547,9 @@ export default class Client extends soap.Client {
             }
           }else{
             fetchBranch().then(result=>{
-              const xmlCache=JSON.parse(localStorage.getItem("xmlCache") ?? "{}")
+              const xmlCache=JSON.parse(localStorage.getItem("xmlCache2") ?? "{}")
               xmlCache[identifier]={data:result,age:Date.now()}
-              localStorage.setItem("xmlCache",JSON.stringify(xmlCache))
+              localStorage.setItem("xmlCache2",JSON.stringify(xmlCache))
               parseBranch(result)
             })
           }

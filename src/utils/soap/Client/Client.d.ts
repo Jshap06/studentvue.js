@@ -3,6 +3,7 @@ export default class Client {
     private __username__;
     private __password__;
     private __district__;
+    private __apiKey__;
     private static url;
     private readonly isParent;
     encrypted: boolean;
@@ -10,6 +11,7 @@ export default class Client {
     get username(): string;
     get password(): string;
     get proxyUrl(): string;
+    get apiKey():string;
     protected get credentials(): LoginCredentials;
     constructor(credentials: LoginCredentials, Purl?: string);
     /**

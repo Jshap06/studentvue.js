@@ -1601,6 +1601,11 @@ declare module 'studentvue/StudentVue/Client/Interfaces/StudentInfo' {
             office: string;
         };
     
+        //schools list for when it's derived from ChildList the StudentInfo call doesn't actually provide this LMAO
+        schools?:{name:string,GU:string}[] //the school GU can be used for the gradebook call ahah
+    
+    
+    
         /**
             * The info about the student's lockers
             */

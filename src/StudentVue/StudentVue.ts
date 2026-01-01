@@ -4,6 +4,7 @@ import soap from '../utils/soap/soap';
 import { DistrictListXMLObject } from './StudentVue.xml';
 import RequestException from './RequestException/RequestException';
 import { Gradebook } from './Client/Client.interfaces';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 //helper function fuck y'all goofy ahh
@@ -21,7 +22,8 @@ function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
 
 async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradebook,any][]>{
 
-    const info=JSON.parse(localStorage.getItem("mps") ?? "{}");
+    const storedData = await AsyncStorage.getItem("mps");
+    const info=JSON.parse(storedData ?? "{}");
     const periods=info.periods
     if(!(periods?.length>0)||info.district!=client.district||true){
         //cacheLoading
@@ -32,7 +34,7 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 			date:date,
 			index: index,
 		}))
-      localStorage.setItem("mps",JSON.stringify({periods:periods,district:client.district}))
+      await AsyncStorage.setItem("mps",JSON.stringify({periods:periods,district:client.district}))
       const remainder:typeof result[]=await Promise.all(periods.map(mp=>{if(result[0].reportingPeriod.current.index==mp.index){return new Promise<typeof result>((res,rej)=>{res(result)})}else{return stupid(client,mp)}}))
       return [...remainder]
 

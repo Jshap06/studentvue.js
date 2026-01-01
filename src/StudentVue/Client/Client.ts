@@ -27,6 +27,7 @@ import cache from '../../utils/cache/cache';
 import { optional, asyncPoolAll } from './Client.helpers';
 import he from "he";
 import { el, id } from 'date-fns/locale';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * TO DO; rewrite the studentInfo stuff to primary ChildList with studentInfo as the fallback, 
@@ -521,39 +522,43 @@ export default class Client extends soap.Client {
 };
 
 
-      
+
 
       if(fresh||reportingPeriodIndex==null){
         console.log("what the fuck guys")
-        fetchBranch().then(result=>{console.log("boston");
-          const m=JSON.parse(localStorage.getItem("xmlCache2") ?? "{}")
+        fetchBranch().then(async result=>{console.log("boston");
+          const cachedData = await AsyncStorage.getItem("xmlCache2")
+          const m = JSON.parse(cachedData ?? "{}")
           const identifier=this.district+this.username+reportingPeriodIndex
           m[identifier]={age:Date.now(),data:result}
-          localStorage.setItem("xmlCache2",JSON.stringify(m))
+          await AsyncStorage.setItem("xmlCache2",JSON.stringify(m))
           parseBranch(result)}).catch(err=>rej(err))
-      }   
+      }
         else{
-          const m:xmlCache = JSON.parse(localStorage.getItem("xmlCache2") ?? "{}")
-          const identifier=this.district+this.username+reportingPeriodIndex
-          if(m[identifier]){
-            if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh 
-                      fetchBranch().then((result)=>{
-                      m[identifier]={data:result,age:Date.now()}
-                      localStorage.setItem("xmlCache2",JSON.stringify(m))
-                      parseBranch(result)}).catch(err=>rej(err))
+          (async () => {
+            const cachedData = await AsyncStorage.getItem("xmlCache2")
+            const m:xmlCache = JSON.parse(cachedData ?? "{}")
+            const identifier=this.district+this.username+reportingPeriodIndex
+            if(m[identifier]){
+              if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh
+                        fetchBranch().then(async (result)=>{
+                        m[identifier]={data:result,age:Date.now()}
+                        await AsyncStorage.setItem("xmlCache2",JSON.stringify(m))
+                        parseBranch(result)}).catch(err=>rej(err))
+              }
+              else{
+                  parseBranch(m[identifier].data)
+              }
+            }else{
+              fetchBranch().then(async result=>{
+                const cachedData = await AsyncStorage.getItem("xmlCache2")
+                const xmlCache = JSON.parse(cachedData ?? "{}")
+                xmlCache[identifier]={data:result,age:Date.now()}
+                await AsyncStorage.setItem("xmlCache2",JSON.stringify(xmlCache))
+                parseBranch(result)
+              })
             }
-            else{
-                parseBranch(m[identifier].data)
-            }
-          }else{
-            fetchBranch().then(result=>{
-              const xmlCache=JSON.parse(localStorage.getItem("xmlCache2") ?? "{}")
-              xmlCache[identifier]={data:result,age:Date.now()}
-              localStorage.setItem("xmlCache2",JSON.stringify(xmlCache))
-              parseBranch(result)
-            })
-          }
-
+          })().catch(err=>rej(err))
         }
     });
   }

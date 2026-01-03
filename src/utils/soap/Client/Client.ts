@@ -10,6 +10,7 @@ import RequestException from '../../../StudentVue/RequestException/RequestExcept
 import CryptoJS from "crypto-js"
 
 
+
 export default class Client {
   private __username__: string;
   private __password__: string;
@@ -129,9 +130,9 @@ export default class Client {
 
       fetch(this.district, {
         method: 'POST',
+        credentials:"omit",
         headers: {
-          'Content-Type': 'text/xml',
-          'Cookie': 'edupointkeyversion=' + this.__apiKey__ + ';'
+          'Content-Type': 'text/xml'
         },
         body: xml
       })

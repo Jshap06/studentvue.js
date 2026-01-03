@@ -10,8 +10,8 @@ export default class Client {
     get district(): string;
     get username(): string;
     get password(): string;
+    get apiKey(): string;
     get proxyUrl(): string;
-    get apiKey():string;
     protected get credentials(): LoginCredentials;
     constructor(credentials: LoginCredentials, Purl?: string);
     /**
@@ -45,7 +45,7 @@ export default class Client {
   </soap:Envelope>
      * ```
      */
-    processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
+    protected processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
     private static parseParamStr;
     static processAnonymousRequest<T extends object | undefined>(url: string, options?: Partial<RequestOptions>, preparse?: (xml: string) => string): Promise<T>;
 }

@@ -283,7 +283,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * @returns {Promise<Calendar>} Returns a Calendar object
                 * @description
                 * ```js
-                * client.calendar({ interval: { start: new Date('5/1/2022'), end: new Date('8/1/2021') }, concurrency: null }); // -> Limitless concurrency (not recommended)
+                * client.calendar({ interval: { start: dateParse('5/1/2022',"M/dd/yyyy",new Date()), end: dateParse('8/1/2021',"M/dd/yyyy",new Date()) }, concurrency: null }); // -> Limitless concurrency (not recommended)
                 *
                 * const calendar = await client.calendar({ interval: { ... }});
                 * console.log(calendar); // -> { schoolDate: {...}, outputRange: {...}, events: [...] }
@@ -1992,6 +1992,7 @@ declare module 'studentvue/utils/soap/Client/Client' {
         get district(): string;
         get username(): string;
         get password(): string;
+        get apiKey(): string;
         get proxyUrl(): string;
         protected get credentials(): LoginCredentials;
         constructor(credentials: LoginCredentials, Purl?: string);
@@ -2026,7 +2027,7 @@ declare module 'studentvue/utils/soap/Client/Client' {
       </soap:Envelope>
           * ```
           */
-        processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
+        protected processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
         static processAnonymousRequest<T extends object | undefined>(url: string, options?: Partial<RequestOptions>, preparse?: (xml: string) => string): Promise<T>;
     }
 }

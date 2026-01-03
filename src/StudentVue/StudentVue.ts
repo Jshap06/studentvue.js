@@ -85,7 +85,7 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
     );
       getGradebooks(client,null,null)
       .then((response) => {
-        console.log("immediate login response",response,proxyUrl);
+ 
         res({client:client,responses:response});
       })
       .catch(rej);

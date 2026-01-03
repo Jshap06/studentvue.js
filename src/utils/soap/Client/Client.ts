@@ -130,7 +130,6 @@ export default class Client {
 
       fetch(this.district, {
         method: 'POST',
-        credentials:"omit",
         headers: {
           'Content-Type': 'text/xml'
         },

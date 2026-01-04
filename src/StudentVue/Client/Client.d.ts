@@ -83,7 +83,7 @@ export default class Client extends soap.Client {
      * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
      * ```
      */
-    gradebook(reportingPeriodIndex?: number, orgYearGu?: string, fresh?: boolean): Promise<[Gradebook, any]>;
+    gradebook(reportingPeriodIndex?: number|null, orgYearGu?: string|null, fresh?: boolean): Promise<[Gradebook, any]>;
     /**
      * Get a list of messages of the student
      * @returns {Promise<Message[]>} Returns an array of messages of the student

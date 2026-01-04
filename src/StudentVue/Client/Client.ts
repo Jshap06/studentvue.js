@@ -497,6 +497,14 @@ export default class Client extends soap.Client {
         );}
         }
 
+        async function mykeysbro(){
+          const m = await AsyncStorage.getAllKeys()
+          console.log(m.toString())
+          const j = await AsyncStorage.getItem("xmlCache2");
+       
+          console.log("optimus",Object.keys(JSON.parse(j ?? "{}")))
+          return m.toString() 
+        }
       
     
   const fetchBranch = (): Promise<GradebookXMLObject> => {
@@ -526,7 +534,7 @@ export default class Client extends soap.Client {
 
 
       if(fresh||reportingPeriodIndex==null){
-        console.log("what the fuck guys")
+        console.log("what the fuck guys",reportingPeriodIndex);mykeysbro()
         fetchBranch().then(async result=>{console.log("boston");
           const cachedData = await AsyncStorage.getItem("xmlCache2")
           const m = JSON.parse(cachedData ?? "{}")

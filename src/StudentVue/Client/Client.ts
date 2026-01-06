@@ -538,7 +538,7 @@ export default class Client extends soap.Client {
         fetchBranch().then(async result=>{console.log("boston");
           const cachedData = await AsyncStorage.getItem("xmlCache2")
           const m = JSON.parse(cachedData ?? "{}")
-          const identifier=this.district+this.username+reportingPeriodIndex
+          const identifier=this.district+this.username+reportingPeriodIndex+(orgYearGu ?? "")
           m[identifier]={age:Date.now(),data:result}
           await AsyncStorage.setItem("xmlCache2",JSON.stringify(m))
           parseBranch(result)}).catch(err=>rej(err))

@@ -499,10 +499,10 @@ export default class Client extends soap.Client {
 
         async function mykeysbro(){
           const m = await AsyncStorage.getAllKeys()
-          console.log(m.toString())
+   //       console.log(m.toString())
           const j = await AsyncStorage.getItem("xmlCache2");
        
-          console.log("optimus",Object.keys(JSON.parse(j ?? "{}")))
+    //      console.log("optimus",Object.keys(JSON.parse(j ?? "{}")))
           return m.toString() 
         }
       
@@ -547,15 +547,17 @@ export default class Client extends soap.Client {
           (async () => {
             const cachedData = await AsyncStorage.getItem("xmlCache2")
             const m:xmlCache = JSON.parse(cachedData ?? "{}")
-            const identifier=this.district+this.username+reportingPeriodIndex
+            const identifier=this.district+this.username+reportingPeriodIndex+(orgYearGu ?? "")
             if(m[identifier]){
               if(Math.abs(m[identifier].age-Date.now())>1000*60*60*24*3){ // if older than 3 days, refresh
+                     
                         fetchBranch().then(async (result)=>{
                         m[identifier]={data:result,age:Date.now()}
                         await AsyncStorage.setItem("xmlCache2",JSON.stringify(m))
                         parseBranch(result)}).catch(err=>rej(err))
               }
               else{
+                   console.log((orgYearGu!=null ? "I CANT GOON" : "IM GOONING IM GOONING"))
                   parseBranch(m[identifier].data)
               }
             }else{

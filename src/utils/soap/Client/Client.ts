@@ -57,7 +57,6 @@ export default class Client {
 
     this.isParent = credentials.isParent ? 1 : 0;
     this.encrypted=credentials.encrypted;
-    console.log("i am the constructor",Purl,Client.url)
     Client.url=Purl;
   }
 
@@ -285,7 +284,6 @@ function generateKey() : string {
     // Convert the encrypted data to a Base64 string
     let encryptedString = encrypted.toString();
 
-    console.log('API Key:', encryptedString);
     return encryptedString;
   } catch (error:any) {
     console.error(error);

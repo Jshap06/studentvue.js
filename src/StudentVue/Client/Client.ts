@@ -525,7 +525,6 @@ export default class Client extends soap.Client {
           .toString()
     )
     .then((result) => {
-      console.log("josh stewart");
       return result;
     });
 };
@@ -534,8 +533,8 @@ export default class Client extends soap.Client {
 
 
       if(fresh||reportingPeriodIndex==null){
-        console.log("what the fuck guys",reportingPeriodIndex);mykeysbro()
-        fetchBranch().then(async result=>{console.log("boston");
+        console.log("Reporting Period: ",reportingPeriodIndex);mykeysbro()
+        fetchBranch().then(async result=>{console.log("Fetched fresh data");
           const cachedData = await AsyncStorage.getItem("xmlCache2")
           const m = JSON.parse(cachedData ?? "{}")
           const identifier=this.district+this.username+reportingPeriodIndex+(orgYearGu ?? "")
@@ -557,7 +556,6 @@ export default class Client extends soap.Client {
                         parseBranch(result)}).catch(err=>rej(err))
               }
               else{
-                   console.log((orgYearGu!=null ? "I CANT GOON" : "IM GOONING IM GOONING"))
                   parseBranch(m[identifier].data)
               }
             }else{
@@ -643,10 +641,10 @@ export default class Client extends soap.Client {
 
 
           }
-          console.log(xmlObject,"stupid wanker")
+          console.log(xmlObject,"right above concurrent")
           
           if(xmlObject.Child[0]["ConcurrentSchools"]?.[0]){
-            console.log("did we make it here?")
+            console.log("begin concurrent branch")
     
             var l=xmlObject.Child[0]["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"][0]["@_ConSchoolName"][0],GU:school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0]}))
           
@@ -655,7 +653,7 @@ export default class Client extends soap.Client {
             //@ts-ignore
             m.schools=l
           }
-          console.log("how about here?",m)
+          console.log("Concurrent Schools: ",m)
 
             res([m as StudentInfo,raw.extraData])})
           .catch(rej)

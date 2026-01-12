@@ -2,6 +2,7 @@ import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import File from '../File/File';
 import { DocumentFile } from './Document.interfaces';
 import { DocumentFileXMLObject, DocumentXMLObject } from './Document.xml';
+import { parse as dateParse } from "date-fns";
 
 export default class Document extends File<DocumentFile[]> {
   public readonly file: {
@@ -40,7 +41,7 @@ export default class Document extends File<DocumentFile[]> {
     this.file = {
       name: xmlObj['@_DocumentFileName'][0],
       type: xmlObj['@_DocumentType'][0],
-      date: new Date(xmlObj['@_DocumentDate'][0]),
+      date: dateParse(xmlObj['@_DocumentDate'][0],"M/dd/yyyy",new Date())
     };
 
     /**

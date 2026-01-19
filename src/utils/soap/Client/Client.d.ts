@@ -3,14 +3,12 @@ export default class Client {
     private __username__;
     private __password__;
     private __district__;
-    private __apiKey__;
     private static url;
     private readonly isParent;
     encrypted: boolean;
     get district(): string;
     get username(): string;
     get password(): string;
-    get apiKey(): string;
     get proxyUrl(): string;
     protected get credentials(): LoginCredentials;
     constructor(credentials: LoginCredentials, Purl?: string);
@@ -46,6 +44,8 @@ export default class Client {
      * ```
      */
     protected processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
+    private processRequestNative;
     private static parseParamStr;
     static processAnonymousRequest<T extends object | undefined>(url: string, options?: Partial<RequestOptions>, preparse?: (xml: string) => string): Promise<T>;
+    private processRequestWeb;
 }

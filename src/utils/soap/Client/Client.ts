@@ -7,8 +7,6 @@ import {
   LoginCredentials,
 } from '../../../utils/soap/Client/Client.interfaces';
 import RequestException from '../../../StudentVue/RequestException/RequestException';
-import CryptoJS from "crypto-js"
-
 
 
 export default class Client {
@@ -90,7 +88,24 @@ export default class Client {
    * ```
    */
   
-  protected processRequest<T extends object | undefined>(
+
+
+
+protected processRequest<T extends object | undefined>(
+    options: RequestOptions,
+    preparse: (xml: string) => string = (xml) => xml
+  ): Promise<T> {
+    if(this.proxyUrl=="native"){
+      return this.processRequestNative(options,preparse)
+    }else{
+      return this.processRequestWeb(options,preparse)
+    }
+
+}
+
+
+
+  private processRequestNative<T extends object | undefined>(
     options: RequestOptions,
     preparse: (xml: string) => string = (xml) => xml
   ): Promise<T> {
@@ -246,6 +261,85 @@ export default class Client {
         .catch(reject);
     });
   }
+
+
+
+
+
+
+  
+  private processRequestWeb<T extends object | undefined>(
+    options: RequestOptions,
+    preparse: (xml: string) => string = (xml) => xml
+  ): Promise<T> {
+    const defaultOptions: RequestOptions = {
+      validateErrors: true,
+      skipLoginLog: 0,
+      parent: this.isParent,
+      webServiceHandleName: 'PXPWebServices',
+      paramStr: {},
+      ...options,
+    };
+    const expressUrl=Client.url;
+    return new Promise((res, reject) => {
+      const builder = new XMLBuilder({
+        ignoreAttributes: false,
+        arrayNodeName: 'soap:Envelope',
+        suppressEmptyNode: true,
+      });
+      const xml = builder.build({
+        'soap:Envelope': {
+          '@_xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+          '@_xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
+          '@_xmlns:soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+          'soap:Body': {
+            ProcessWebServiceRequestMultiWeb: {
+              '@_xmlns': 'http://edupoint.com/webservices/',
+              userID: this.username,
+              password: this.password,
+              ...defaultOptions,
+              ...{ paramStr: Client.parseParamStr(defaultOptions.paramStr ?? {}) },
+            },
+          },
+        },
+      });
+
+        fetch(expressUrl+"/fulfillAxios",{
+        'method':'POST',
+        'headers':{'Content-Type':'application/json'},
+        'body':JSON.stringify({'url':this.district,'xml':xml,'encrypted':this.encrypted})
+    })
+        .then(async(response:any) => {
+          const realResponse=await response.json();
+          if(!realResponse.status){return reject(new Error(realResponse.message))}
+          else{var data=realResponse.response}
+  
+          const parser = new XMLParser({});
+          const result: ParsedRequestResult = parser.parse(data);
+          const parserTwo = new XMLParser({
+            ignoreAttributes: false,
+            isArray: () => true,
+            processEntities: false,
+            parseAttributeValue: false,
+            parseTagValue: false,
+          });
+
+          const obj: any | ParsedRequestError = parserTwo.parse(
+            preparse(
+              result['soap:Envelope']['soap:Body'].ProcessWebServiceRequestMultiWebResponse.ProcessWebServiceRequestMultiWebResult
+            )
+          );
+
+          if (defaultOptions.validateErrors && typeof obj === 'object' && 'RT_ERROR' in obj){
+            return reject(new RequestException(obj));}
+
+         delete realResponse.response;delete realResponse.status;
+         if(Object.keys(realResponse).length>0){
+          obj.extraData=realResponse
+         }
+          res(obj as T);
+        })
+        .catch(reject);
+    });
+  }
 }
-
-

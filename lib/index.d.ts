@@ -257,7 +257,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 * await client.gradebook(7) // Some schools will have ReportingPeriodIndex 7 as "4th Quarter"
                 * ```
                 */
-            gradebook(reportingPeriodIndex?: number, orgYearGu?: string, fresh?: boolean): Promise<[Gradebook, any]>;
+            gradebook(reportingPeriodIndex?: number | null, orgYearGu?: string | null, fresh?: boolean): Promise<[Gradebook, any]>;
             /**
                 * Get a list of messages of the student
                 * @returns {Promise<Message[]>} Returns an array of messages of the student
@@ -1992,7 +1992,6 @@ declare module 'studentvue/utils/soap/Client/Client' {
         get district(): string;
         get username(): string;
         get password(): string;
-        get apiKey(): string;
         get proxyUrl(): string;
         protected get credentials(): LoginCredentials;
         constructor(credentials: LoginCredentials, Purl?: string);

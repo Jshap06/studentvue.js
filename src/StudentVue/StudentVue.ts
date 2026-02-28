@@ -9,13 +9,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 //helper function fuck y'all goofy ahh
 
-function stupid(client:Client,mp:any):Promise<[Gradebook,any]>{
+function stupid(client:Client,mp:any,getFresh=false):Promise<[Gradebook,any]>{
   try{
     //@ts-ignore
-    return new Promise((res,rej)=>client.gradebook(mp.index,null,false).then(grades=>res(grades)).catch(error=>rej(error)))
+    return new Promise((res,rej)=>client.gradebook(mp.index,null,getFresh).then(grades=>res(grades)).catch(error=>rej(error)))
   }catch(error){console.log(error,"dexter morgan");
     //@ts-ignore
-    return new Promise((res,rej)=>client.gradebook(mp.index,null,false).then(grades=>res(grades)).catch(error=>rej(error)))
+    return new Promise((res,rej)=>client.gradebook(mp.index,null,getFresh).then(grades=>res(grades)).catch(error=>rej(error)))
   }
 }
 
@@ -35,7 +35,7 @@ async function getGradebooks(client:Client,lock:any,setLock:any):Promise<[Gradeb
 			index: index,
 		}))
       await AsyncStorage.setItem("mps",JSON.stringify({periods:periods,district:client.district}))
-      const remainder:typeof result[]=await Promise.all(periods.map(mp=>{if(result[0].reportingPeriod.current.index==mp.index){return new Promise<typeof result>((res,rej)=>{res(result)})}else{return stupid(client,mp)}}))
+      const remainder:typeof result[]=await Promise.all(periods.map(mp=>{if(result[0].reportingPeriod.current.index==mp.index){return new Promise<typeof result>((res,rej)=>{res(result)})}else if(result[0].reportingPeriod.current.index+1==mp.index){return stupid(client,mp,true)}else{return stupid(client,mp)}}))
       return [...remainder]
 
 

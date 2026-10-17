@@ -227,15 +227,19 @@ declare module 'studentvue/StudentVue/Client/Client' {
             /**
                 * Gets the schedule of the student
                 * @param {number} termIndex The index of the term.
-                * @returns {Promise<Schedule>} Returns the schedule of the student
+                * @returns {Promise<[any, any]>} Returns the schedule of the student
                 * @description
                 * ```js
-                * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
+                * await schedule(0) // -> { termName: 'Semester 1', termIndex: '0', terms: [...], mainClasses: [...], today: false }
                 * ```
                 */
             schedule(termIndex?: number): Promise<[any, any]>;
             /**
                 * Returns the attendance of the student
+                * @param {string} orgYearGu The concurrent school's orgYearGU to fetch attendance for, if any
+                *   (same pattern as `gradebook()`'s own `orgYearGu` param). REST requires `orgYearGU` on every
+                *   call, unlike the old SOAP method - pass the student's own `orgYearGu` (from `ChildList`/
+                *   `studentInfo()`) if you don't have a concurrent school to target.
                 * @returns {Promise<Attendance>} Returns an Attendance object
                 * @description
                 * ```js
@@ -243,7 +247,7 @@ declare module 'studentvue/StudentVue/Client/Client' {
                 *  .then(console.log); // -> { type: 'Period', period: {...}, schoolName: 'University High School', absences: [...], periodInfos: [...] }
                 * ```
                 */
-            attendance(): Promise<[Attendance, any]>;
+            attendance(orgYearGu?: string | null): Promise<[Attendance, any]>;
             /**
                 * Returns the gradebook of the student
                 * @param {number} reportingPeriodIndex The timeframe that the gradebook should return
@@ -334,12 +338,15 @@ declare module 'studentvue/StudentVue/File/File' {
         */
     export default abstract class File<T> extends soap.Client {
             readonly documentGu: string;
-            constructor(credentials: LoginCredentials, documentGu: string, methodName: string);
+            constructor(credentials: LoginCredentials, documentGu: string, methodName: string, restMethodName?: string);
             /**
-                * Parse the XML object to translate it into an ordinary object. This method must be written for every class that extends Document (which gets the file from synergy servers using a POST fetch request)
-                * @param {unknown} xmlObject The XML Object passed after parsing
+                * Parse the response into an ordinary object. This method must be written for every class
+                * that extends File. When `restMethodName` is set (REST path), this receives the REST JSON
+                * response instead of an XML object - the name is kept for the SOAP subclasses (`ReportCard`)
+                * that still implement it against the XML shape.
+                * @param {unknown} xmlObject The XML object (SOAP) or plain JSON object (REST) passed after parsing
                 * @protected
-                * @returns {T} Returns a reformatted XML object to make it easier for code
+                * @returns {T} Returns a reformatted object to make it easier for code
                 * @description
                 * ```js
                 * const xmlObject = await super.processRequest({...}); // { "@_Attribute": [{ "@_Nested": [{...}, {...}]}]}
@@ -349,7 +356,8 @@ declare module 'studentvue/StudentVue/File/File' {
                 */
             protected abstract parseXMLObject(xmlObject: unknown): T;
             /**
-                * Retrieve the file from synergy servers. After retrieving the xmlObject, this method calls parseXMLObject which must be defined to parse the xmlObject into a readable, typesafe object.
+                * Retrieve the file from synergy servers. After retrieving the response, this method calls
+                * parseXMLObject which must be defined to parse the response into a readable, typesafe object.
                 * @public
                 * @returns {Promise<T>} Returns a base64 object
                 * @description
@@ -1386,25 +1394,35 @@ declare module 'studentvue/StudentVue/Document/Document' {
     import { LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     import File from 'studentvue/StudentVue/File/File';
     import { DocumentFile } from 'studentvue/StudentVue/Document/Document.interfaces';
-    import { DocumentFileXMLObject, DocumentXMLObject } from 'studentvue/StudentVue/Document/Document.xml';
+    /**
+        * The shape of one entry in REST's `GetStudentDocuments` response
+        * (`data.studentDocuments.studentDocumentDatas[]`), confirmed against a real sample.
+        */
+    export interface StudentDocumentDataJSON {
+            documentGU: string;
+            documentFileName: string;
+            documentDate: string;
+            documentType: string;
+            studentGU: string;
+            documentComment: string;
+    }
     export default class Document extends File<DocumentFile[]> {
-        readonly file: {
-            name: string;
-            date: Date;
-            type: string;
-        };
-        readonly comment: string;
-        protected parseXMLObject(xmlObject: DocumentFileXMLObject): {
-            file: {
-                name: string;
-                type: string;
-                date: Date;
+            readonly file: {
+                    name: string;
+                    date: Date;
+                    type: string;
             };
-            category: string;
-            notes: string;
-            base64: string;
-        }[];
-        constructor(xmlObj: DocumentXMLObject['StudentDocuments'][0]['StudentDocumentDatas'][0]['StudentDocumentData'][0], credentials: LoginCredentials);
+            readonly comment: string;
+            /**
+                * Parses REST's `GetStudentDocumentContent` response
+                * (`data.studentAttachedDocumentData.documentDatas[]`), confirmed against a real sample. The
+                * SOAP shape this replaced (`DocumentFileXMLObject`) is no longer handled here - there's no
+                * fallback, per the same "REST primary, no SOAP fallback" approach used for every other
+                * migrated method, since a REST failure should surface as a real error instead of silently
+                * falling back to a second, differently-shaped SOAP error.
+                */
+            protected parseXMLObject(json: any): DocumentFile[];
+            constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials);
     }
 }
 
@@ -2130,41 +2148,6 @@ declare module 'studentvue/StudentVue/ReportCard/ReportCard.xml' {
                 '@_DocFileName': [string];
                 '@_DocType': [string];
                 Base64Code: [string];
-            }
-        ];
-    }
-}
-
-declare module 'studentvue/StudentVue/Document/Document.xml' {
-    export interface DocumentXMLObject {
-        StudentDocuments: Array<{
-            '@_showDateColumn': string[];
-            '@_showDocNameColumn': string[];
-            '@_StudentGU': string[];
-            '@_StudentSSY': string[];
-            StudentDocumentDatas: any
-        }>;
-    }
-    
-    
-    export interface DocumentFileXMLObject {
-        StudentAttachedDocumentData: [
-            {
-                DocumentCategoryLookups: [''];
-                DocumentDatas: [
-                    {
-                        DocumentData: {
-                            '@_DocumentGU': [string];
-                            '@_StudentGU': [string];
-                            '@_DocDate': [string];
-                            '@_FileName': [string];
-                            '@_Category': [string];
-                            '@_Notes': [string];
-                            '@_DocType': [string];
-                            Base64Code: [string];
-                        }[];
-                    }
-                ];
             }
         ];
     }

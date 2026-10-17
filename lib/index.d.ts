@@ -174,7 +174,7 @@ declare module 'studentvue/StudentVue/Icon/Icon' {
 
 declare module 'studentvue/StudentVue/Client/Client' {
     import { LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
-    import soap from 'studentvue/utils/soap/soap';
+    import rest from 'studentvue/utils/rest/rest';
     import { SchoolInfo, StudentInfo } from 'studentvue/StudentVue/Client/Client.interfaces';
     import Message from 'studentvue/StudentVue/Message/Message';
     import { Calendar, CalendarOptions } from 'studentvue/StudentVue/Client/Interfaces/Calendar';
@@ -182,8 +182,8 @@ declare module 'studentvue/StudentVue/Client/Client' {
     import { Attendance } from 'studentvue/StudentVue/Client/Interfaces/Attendance';
     import ReportCard from 'studentvue/StudentVue/ReportCard/ReportCard';
     import Document from 'studentvue/StudentVue/Document/Document';
-    export default class Client extends soap.Client {
-            constructor(credentials: LoginCredentials, proxyUrl: string, hostUrl: string);
+    export default class Client extends rest.Client {
+            constructor(credentials: LoginCredentials, proxyUrl?: string);
             /**
                 * Validate's the user's credentials. It will throw an error if credentials are incorrect
                 */
@@ -605,6 +605,14 @@ declare module 'studentvue/StudentVue/Message/Message.xml' {
             }
         ];
     }
+}
+
+declare module 'studentvue/utils/rest/rest' {
+    import Client from 'studentvue/utils/rest/Client/Client';
+    const _default: {
+        Client: typeof Client;
+    };
+    export default _default;
 }
 
 declare module 'studentvue/StudentVue/Client/Interfaces/Calendar' {
@@ -1996,38 +2004,104 @@ declare module 'studentvue/utils/soap/Client/Client' {
         protected get credentials(): LoginCredentials;
         constructor(credentials: LoginCredentials, Purl?: string);
         /**
-          * Create a POST request to synergy servers to fetch data
-          * @param options Options to provide when making a XML request to the servers
-          * @param preparse Runs before parsing the xml string into an object. Useful for mutating xml that could be parsed incorrectly by `fast-xml-parser`
-          * @returns Returns an XML object that must be defined in a type declaration file.
-          * @see https://github.com/StudentVue/docs
-          * @description
-          * ```js
-          * super.processRequest({ methodName: 'Refer to StudentVue/docs', paramStr: { AnythingThatCanBePassed: true, AsLongAsItMatchesTheDocumentation: true }});
-          * // This will make the XML request below:
-          * ```
-          *
-          * ```xml
-          * <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-            <soap:Body>
-              <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
-                  <userID>STUDENT_USERNAME</userID>
-                  <password>STUDENT_PASSWORD</password>
-                  <skipLoginLog>1</skipLoginLog>
-                  <parent>0</parent>
-                  <webServiceHandleName>PXPWebServices</webServiceHandleName>
-                  <methodName>Refer to StudentVue/docs</methodName>
-                  <paramStr>
-                    <AnythingThatCanBePassed>true</AnythingThatCanBePassed>
-                    <AsLongAsItMatchesTheDocumentation>true</AsLongAsItMatchesTheDocumentation>
-                  </paramStr>
-              </ProcessWebServiceRequest>
-            </soap:Body>
-      </soap:Envelope>
-          * ```
-          */
+            * Public entry point for callers that hold a `soap.Client` by composition rather than
+            * extending it (e.g. a class that now extends `rest.Client` as its primary transport, and
+            * keeps this one around just as a fallback for methods REST doesn't cover yet). Thin wrapper
+            * around `processRequest`.
+            */
+        request<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
         protected processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
         static processAnonymousRequest<T extends object | undefined>(url: string, options?: Partial<RequestOptions>, preparse?: (xml: string) => string): Promise<T>;
+    }
+}
+
+declare module 'studentvue/utils/rest/Client/Client' {
+    import { RequestOptions, LoginCredentials } from 'studentvue/utils/rest/Client/Client.interfaces';
+    import { RequestOptions as AnonymousRequestOptions } from 'studentvue/utils/soap/Client/Client.interfaces';
+    /**
+        * Transport for Edupoint's newer REST "mobile" API
+        * (`/api/v1/mobile/<webServiceHandleName>/<methodName>`), reverse engineered from the official
+        * StudentVUE Android app. This is a sibling of `utils/soap/Client/Client`, which talks to the
+        * deprecated `ProcessWebServiceRequest` SOAP endpoint - the two have the same public shape
+        * (`processRequest`/`processAnonymousRequest`/credential getters) so a consumer can switch
+        * transports by swapping which one it extends.
+        *
+        * Unlike the SOAP API (which re-sends the student's username/password with every single
+        * request), the REST API is session-based: `AttemptLogin` exchanges credentials for a short-lived
+        * `access_token` + `refresh_token` pair, every other call sends `Authorization: Bearer
+        * <access_token>`, and a `401` is recovered from by silently calling `AttemptLogin` again with
+        * `{ token: refresh_token }`. This class does that login/refresh dance internally and
+        * transparently so callers never need to call a login method themselves - just like the SOAP
+        * client, you construct it with credentials and start calling data methods.
+        *
+        * Caveats (see conversation/decompile notes - this was not confirmed against a live server):
+        * - The official app also sends an `edupointkeyversion` header (an AES-encrypted,
+        *   date-based value) and, for a handful of methods (`Gradebook`, `GetChildListData`,
+        *   `GenerateAuthToken`, `GetStudentDisciplineData`, `GetCalendarData`, `StudentClassList`,
+        *   `GetSynergyMailMessage`, `GetStudentHWNotes`, `GetStudentClasesForGivenDayResponse`), an
+        *   additional request signature produced by an Android hardware-attested key
+        *   (`addAndroidSignatureHeaders`/`signAndroidRequest`). Neither is implemented here: the key
+        *   version header could not be reconstructed with full confidence, and the signature
+        *   fundamentally requires real Android Keystore hardware, so it cannot be reproduced from a
+        *   plain JS client. Both appear to be optional/best-effort on the server, since this is
+        *   unauthenticated-by-attestation traffic either way.
+        *
+        * @description
+        * ```js
+        * super.processRequest({ methodName: 'Refer to StudentVue/docs', paramStr: { AnythingThatCanBePassed: true }});
+        * // Makes the request below:
+        * ```
+        *
+        * ```http
+        * POST /api/v1/mobile/PXPWebServices/Refer to StudentVue/docs HTTP/1.1
+        * Content-Type: application/json
+        * User-Agent: ksoap
+        * AppNameOSAndVersion: VUE-STUDENT|Android|1.0.0
+        * Authorization: Bearer <access_token>
+        *
+        * { "arguments": { "request": { "AnythingThatCanBePassed": true } } }
+        * ```
+        *
+        * which responds with:
+        * ```json
+        * { "data": { "...": "..." }, "access_token": "...", "refresh_token": "..." }
+        * ```
+        */
+    export default class Client {
+            encrypted: boolean;
+            /**
+                * Sent in the `AppNameOSAndVersion` header. The server has not been confirmed to validate
+                * these values, so they're left as overridable statics rather than hardcoded.
+                */
+            static appName: string;
+            static appVersion: string;
+            get district(): string;
+            get username(): string;
+            get password(): string;
+            get proxyUrl(): string;
+            protected get credentials(): LoginCredentials;
+            constructor(credentials: LoginCredentials, Purl?: string);
+            /**
+                * Public entry point for callers that hold a `rest.Client` by composition rather than
+                * extending it (e.g. a class that already extends `soap.Client` and wants to use this
+                * transport for just one method). Thin wrapper around `processRequest`.
+                */
+            request<T extends object | undefined>(options: RequestOptions): Promise<T>;
+            /**
+                * Create a POST request to the REST mobile API to fetch data
+                * @param options Options to provide when making a request to the servers
+                * @returns Returns a plain JSON object, already unwrapped from the `{ data: ... }` envelope.
+                * @see https://github.com/StudentVue/docs
+                */
+            protected processRequest<T extends object | undefined>(options: RequestOptions): Promise<T>;
+            /**
+                * Edupoint has no REST equivalent for the anonymous district-lookup call
+                * (`HDInfoServices.GetMatchingDistrictList`) - the official app still issues that one over
+                * the legacy SOAP endpoint (`support.edupoint.com/Service/HDInfoCommunication.asmx`). This
+                * simply delegates to the SOAP client so callers of `rest.Client` still have the method
+                * available.
+                */
+            static processAnonymousRequest<T extends object | undefined>(url: string, options?: Partial<AnonymousRequestOptions>, preparse?: (xml: string) => string): Promise<T>;
     }
 }
 
@@ -2093,6 +2167,104 @@ declare module 'studentvue/StudentVue/Document/Document.xml' {
                 ];
             }
         ];
+    }
+}
+
+declare module 'studentvue/utils/rest/Client/Client.interfaces' {
+    export interface LoginOptions {
+        /**
+            * Whether the user signing in is a parent. Defaults to `false`
+            */
+        isParent?: boolean;
+    }
+    
+    /**
+        * Options to provide when processing a fetch POST request to the REST mobile API
+        */
+    export interface RequestOptions {
+        /**
+            * The service handle sent as part of the URL path when processing the request. For handling
+            * requests for the student, it will be `PXPWebServices`.
+            * @see https://github.com/StudentVue/docs
+            */
+        webServiceHandleName?: string;
+    
+        /**
+            * The method name to provide to synergy when processing the request. This becomes the last
+            * path segment of the request URL, e.g. `/api/v1/mobile/PXPWebServices/Gradebook`.
+            * @see https://github.com/StudentVue/docs
+            */
+        methodName: string;
+    
+        /**
+            * The parameters to provide in the method. Sent as `{ arguments: { request: paramStr } }` in
+            * the JSON request body.
+            * @see https://github.com/StudentVue/docs
+            */
+        paramStr?: Record<string, unknown>;
+    
+        /**
+            * Determine whether or not the function should throw an error when the response contains an
+            * `error` field. Unlike the legacy SOAP API, the REST API responds with real, non-200 HTTP
+            * status codes for a number of failure cases, but still reports some errors inline via
+            * `{ error: { message } }` in an otherwise-200 response.
+            *
+            * If this value is set to `true`, inline errors like this will be detected and thrown.
+            * If set to `false`, this error is ignored and not thrown.
+            */
+        validateErrors?: boolean;
+    }
+    
+    /**
+        * The login information of the student that includes the district url
+        */
+    export interface LoginCredentials extends LoginOptions {
+        /**
+            * The student's username
+            */
+        username: string;
+    
+        /**
+            * The student's password
+            */
+        password: string;
+    
+        /**
+            * The student's district URL. Accepts the same district URL shape used by the SOAP client
+            * (e.g. ending in `/Service/PXPCommunication.asmx`) - only the origin (protocol + host) is
+            * actually used to build REST requests.
+            */
+        districtUrl: string;
+    
+        encrypted: boolean;
+    }
+    
+    /**
+        * The two tokens handed back by `AttemptLogin`/token refresh. `accessToken` is sent as a
+        * `Bearer` Authorization header on every subsequent call; `refreshToken` is used to silently
+        * re-authenticate once an `accessToken` is rejected with an HTTP 401.
+        */
+    export interface RestTokens {
+        accessToken?: string;
+        refreshToken?: string;
+    }
+    
+    /**
+        * The shape of a successful REST mobile API response envelope, prior to unwrapping `data`.
+        */
+    export interface ParsedRestResult<T = any> {
+        data?: T;
+        access_token?: string;
+        refresh_token?: string;
+        error?: {
+            message?: string;
+            code?: string | number;
+        };
+    }
+    
+    export interface ParsedRequestError {
+        message: string;
+        stack?: string;
     }
 }
 

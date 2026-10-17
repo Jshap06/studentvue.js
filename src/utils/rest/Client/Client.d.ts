@@ -91,6 +91,15 @@ export default class Client {
      * @see https://github.com/StudentVue/docs
      */
     protected processRequest<T extends object | undefined>(options: RequestOptions): Promise<T>;
+    private processRequestNative;
+    /**
+     * Same as `processRequestNative`, but for contexts (browsers) that can't hit the mobile API
+     * directly because of CORS - relayed through `<proxyUrl>/fulfillRest` instead, the REST sibling
+     * of `fulfillAxios`. The proxy builds the real `Authorization` header and the
+     * double-JSON-encoded body itself (so it can decrypt an `encrypted` password first), and injects
+     * its own server-side `edupointkeyversion`; this method just hands it the pieces.
+     */
+    private processRequestWeb;
     /**
      * Edupoint has no REST equivalent for the anonymous district-lookup call
      * (`HDInfoServices.GetMatchingDistrictList`) - the official app still issues that one over

@@ -225,7 +225,11 @@ export default class Client {
    * @returns Returns a plain JSON object, already unwrapped from the `{ data: ... }` envelope.
    * @see https://github.com/StudentVue/docs
    */
-  protected async processRequest<T extends object | undefined>(options: RequestOptions): Promise<T> {
+  protected processRequest<T extends object | undefined>(options: RequestOptions): Promise<T> {
+    return this.proxyUrl === 'native' ? this.processRequestNative<T>(options) : this.processRequestWeb<T>(options);
+  }
+
+  private async processRequestNative<T extends object | undefined>(options: RequestOptions): Promise<T> {
     const defaultOptions: RequestOptions = {
       validateErrors: true,
       webServiceHandleName: 'PXPWebServices',
@@ -306,6 +310,117 @@ export default class Client {
     }
 
     return result.data as T;
+  }
+
+  /**
+   * Same as `processRequestNative`, but for contexts (browsers) that can't hit the mobile API
+   * directly because of CORS - relayed through `<proxyUrl>/fulfillRest` instead, the REST sibling
+   * of `fulfillAxios`. The proxy builds the real `Authorization` header and the
+   * double-JSON-encoded body itself (so it can decrypt an `encrypted` password first), and injects
+   * its own server-side `edupointkeyversion`; this method just hands it the pieces.
+   */
+  private async processRequestWeb<T extends object | undefined>(options: RequestOptions): Promise<T> {
+    const defaultOptions: RequestOptions = {
+      validateErrors: true,
+      webServiceHandleName: 'PXPWebServices',
+      paramStr: {},
+      ...options,
+    };
+
+    const isLogin = defaultOptions.methodName === 'AttemptLogin';
+    if (!isLogin) {
+      await this.ensureAuthenticated();
+    }
+
+    let bodyParams: Record<string, unknown> = { ...(defaultOptions.paramStr ?? {}) };
+    let auth: { type: 'basic'; userID: string; password: string } | { type: 'bearer'; token: string };
+
+    if (isLogin) {
+      const { userID, password, token, ...rest } = bodyParams as {
+        userID?: string;
+        password?: string;
+        token?: string;
+      };
+      auth = token
+        ? { type: 'bearer', token }
+        : { type: 'basic', userID: userID ?? this.username, password: password ?? this.password };
+      // The proxy re-adds userID/password/token to the body itself once it's decrypted them -
+      // forward only what's left (e.g. userType).
+      bodyParams = rest;
+    } else {
+      auth = { type: 'bearer', token: this.tokens.accessToken as string };
+    }
+
+    const url = this.buildUrl(defaultOptions.webServiceHandleName as string, defaultOptions.methodName);
+    const expressUrl = this.proxyUrl;
+    const doFetch = (): Promise<Response> =>
+      fetch(`${expressUrl}/fulfillRest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          methodName: defaultOptions.methodName,
+          userID: this.username,
+          request: bodyParams,
+          auth,
+          encrypted: this.encrypted,
+        }),
+      });
+
+    let response = await doFetch();
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    let relay: {
+      status: boolean;
+      response?: ParsedRestResult<T>;
+      gradingScale?: unknown;
+      message?: string;
+      httpStatus?: number;
+    } = await response.json();
+
+    if (!relay.status && relay.httpStatus === 401 && !isLogin) {
+      try {
+        if (this.tokens.refreshToken) {
+          await this.refresh();
+        } else {
+          this.tokens = {};
+          await this.login();
+        }
+      } catch {
+        this.tokens = {};
+        await this.login();
+      }
+      auth = { type: 'bearer', token: this.tokens.accessToken as string };
+      response = await doFetch();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      relay = await response.json();
+    }
+
+    if (!relay.status) {
+      throw new Error(relay.message ?? 'Unknown error from the proxy');
+    }
+
+    const result = relay.response as ParsedRestResult<T>;
+
+    if (result.access_token) this.tokens.accessToken = result.access_token;
+    if (result.refresh_token) this.tokens.refreshToken = result.refresh_token;
+
+    if (defaultOptions.validateErrors && result.error) {
+      const error: ParsedRequestError = { message: result.error.message ?? 'Unknown error from StudentVUE REST API' };
+      throw new RequestException(error);
+    }
+
+    const data = result.data as T;
+    // Same convention soap.Client's processRequestWeb uses: the proxy's "optimistic gradeScale
+    // fetch" (Gradebook only) rides alongside `response` and gets surfaced as `extraData`.
+    if (relay.gradingScale !== undefined && data != null && typeof data === 'object') {
+      (data as Record<string, unknown>).extraData = { gradingScale: relay.gradingScale };
+    }
+
+    return data;
   }
 
   /**

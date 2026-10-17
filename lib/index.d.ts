@@ -173,6 +173,24 @@ declare module 'studentvue/StudentVue/Icon/Icon' {
 }
 
 declare module 'studentvue/StudentVue/Client/Client' {
+    /**
+        * REST migration TODO - what's unconfirmed or unmigrated, and why (see each method's own
+        * comments for detail):
+        * - ChildList (GetChildListData): concurrent-school mapping now CONFIRMED via a real sample -
+        *   it's a `concurrentSchools` array on the student's own `childrenList` entry, not extra entries.
+        * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
+        *   additionalInfo still unconfirmed - a full untruncated sample arrived but this student simply
+        *   didn't have any of those five populated, so their field names/shapes remain guesses.
+        * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
+        *   unconfirmed - no concurrent-enrollment or weekday sample yet.
+        * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was
+        *   truncated. dailyAttendance (twice-daily schools) unsupported entirely - different shape,
+        *   needs its own type, rejects with an explicit error for now.
+        * - reportCards, messages, schoolInfo, calendar: not migrated yet - no REST method name/shape
+        *   confirmed, still SOAP-only via `this.soapClient`.
+        * - validateCredentials: intentionally left on SOAP - relies on a SOAP-specific bogus-method
+        *   error-message trick, no REST equivalent attempted.
+        */
     import { LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     import rest from 'studentvue/utils/rest/rest';
     import { SchoolInfo, StudentInfo } from 'studentvue/StudentVue/Client/Client.interfaces';

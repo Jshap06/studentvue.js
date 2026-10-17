@@ -1,10 +1,11 @@
 /**
  * REST migration TODO - what's unconfirmed or unmigrated, and why (see each method's own
  * comments for detail):
- * - ChildList (GetChildListData): concurrent-school mapping unconfirmed - no sample from a
- *   concurrently-enrolled student.
+ * - ChildList (GetChildListData): concurrent-school mapping now CONFIRMED via a real sample -
+ *   it's a `concurrentSchools` array on the student's own `childrenList` entry, not extra entries.
  * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
- *   additionalInfo unconfirmed - sample was truncated before reaching them.
+ *   additionalInfo still unconfirmed - a full untruncated sample arrived but this student simply
+ *   didn't have any of those five populated, so their field names/shapes remain guesses.
  * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
  *   unconfirmed - no concurrent-enrollment or weekday sample yet.
  * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was
@@ -103,15 +104,15 @@ function isChildListJSON(obj: any): boolean {
  * `ChildList()` fallback produces - see the comment on that branch for which `StudentInfo` fields
  * this does and doesn't fill in.
  *
- * Unconfirmed: a concurrently-enrolled student's second school was never observed in a REST
- * sample. The XML branch nests it under a single child's `ConcurrentSchools`; this guesses the
- * REST equivalent is one extra `childrenList` entry per concurrent school for the same student
- * (entries after the first), since there's no other field that obviously carries it. Revisit if
- * a concurrent-enrollment sample ever turns up.
+ * Confirmed via a real concurrently-enrolled student's sample: concurrent schools are NOT extra
+ * `childrenList` entries (there's still just one entry per student) - they're a `concurrentSchools`
+ * array on that single entry, each with `conSchoolName`/`conOrgYearGU`/`conStudentSchYrGU`. The
+ * earlier guess (one `childrenList` entry per concurrent school) was wrong and has been replaced.
  */
 function parseChildListJSON(json: any): StudentInfo {
   const children: any[] = json.children.childrenList ?? [];
   const child = children[0] ?? {};
+  const concurrentSchools: any[] = child.concurrentSchools ?? [];
 
   const m: any = {
     student: {
@@ -128,10 +129,10 @@ function parseChildListJSON(json: any): StudentInfo {
     grade: child.grade ?? undefined,
   };
 
-  if (children.length > 1) {
-    m.schools = children.slice(1).map((c: any) => ({
-      name: c.organizationName,
-      GU: c.orgYearGU,
+  if (concurrentSchools.length > 0) {
+    m.schools = concurrentSchools.map((c: any) => ({
+      name: c.conSchoolName,
+      GU: c.conOrgYearGU,
     }));
   }
 
@@ -154,12 +155,14 @@ function isStudentInfoJSON(obj: any): boolean {
  * Parses the JSON student-info format into the same shape the XML branch's `studentInfo()`
  * produces.
  *
- * Unconfirmed: the only REST sample seen was truncated right after `photo`, before `dentist`,
- * `physician`, `emergencyContacts`, `lockerInfoRecords` and `userDefinedGroupBoxes` would have
- * appeared (if present at all - they may simply be absent for a student with none of those). The
- * field names/shapes below for those five are guessed by analogy with the confirmed fields'
- * camelCase convention (e.g. `permID`, `orgYearGU`, `counselorStaffGU`), not observed directly.
- * Revisit once a fuller sample turns up.
+ * Confirmed: a second, complete (non-truncated) sample ended cleanly right after `photo`, with no
+ * `dentist`/`physician`/`emergencyContacts`/`lockerInfoRecords`/`userDefinedGroupBoxes` keys at
+ * all - consistent with those being omitted when the student has none of that data, rather than
+ * REST never sending them. All other fields in this parser (`permID`, `orgYearGU`,
+ * `counselorStaffGU`, `homeRoomTch*`, etc.) are now confirmed against two real samples. The field
+ * names/shapes for the five still-unseen ones below remain guessed by analogy with the confirmed
+ * fields' camelCase convention - revisit once a sample from a student who actually has one of
+ * those five populated turns up.
  */
 function parseStudentInfoJSON(json: any): StudentInfo {
   const info: any = json.studentInfoDetailXML ?? json.studentInfoXML ?? {};

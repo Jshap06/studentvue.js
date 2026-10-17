@@ -1,10 +1,11 @@
 /**
  * REST migration TODO - what's unconfirmed or unmigrated, and why (see each method's own
  * comments for detail):
- * - ChildList (GetChildListData): concurrent-school mapping unconfirmed - no sample from a
- *   concurrently-enrolled student.
+ * - ChildList (GetChildListData): concurrent-school mapping now CONFIRMED via a real sample -
+ *   it's a `concurrentSchools` array on the student's own `childrenList` entry, not extra entries.
  * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
- *   additionalInfo unconfirmed - sample was truncated before reaching them.
+ *   additionalInfo still unconfirmed - a full untruncated sample arrived but this student simply
+ *   didn't have any of those five populated, so their field names/shapes remain guesses.
  * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
  *   unconfirmed - no concurrent-enrollment or weekday sample yet.
  * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was

@@ -1,5 +1,5 @@
 import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
-import soap from '../../utils/soap/soap';
+import rest from '../../utils/rest/rest';
 import { SchoolInfo, StudentInfo } from './Client.interfaces';
 import Message from '../Message/Message';
 import { Calendar, CalendarOptions } from './Interfaces/Calendar';
@@ -7,9 +7,10 @@ import { Gradebook } from './Interfaces/Gradebook';
 import { Attendance } from './Interfaces/Attendance';
 import ReportCard from '../ReportCard/ReportCard';
 import Document from '../Document/Document';
-export default class Client extends soap.Client {
+export default class Client extends rest.Client {
     private hostUrl;
-    constructor(credentials: LoginCredentials, proxyUrl: string, hostUrl: string);
+    private soapClient;
+    constructor(credentials: LoginCredentials, proxyUrl?: string);
     /**
      * Validate's the user's credentials. It will throw an error if credentials are incorrect
      */

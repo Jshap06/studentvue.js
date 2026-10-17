@@ -70,5 +70,5 @@
     "resolveJsonModule": true
   },
   "exclude": ["src/index.d.ts"],
-  "include": ["./src/StudentVue/*", "./src/utils/soap/*"]
+  "include": ["./src/StudentVue/*", "./src/utils/soap/*", "./src/utils/rest/*"]
 }

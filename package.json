@@ -6,8 +6,7 @@
   "types": "lib/index.d.ts",
   "react-native": {
     "axios": "axios/dist/browser/axios.cjs"
-},
-
+  },
   "scripts": {
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest",
     "build": "node src/tools/cleanup.js lib && npm run build:compile && npm run build:types",

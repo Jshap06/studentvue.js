@@ -43,6 +43,13 @@ export default class Client {
   </soap:Envelope>
      * ```
      */
+    /**
+       * Public entry point for callers that hold a `soap.Client` by composition rather than
+       * extending it (e.g. a class that now extends `rest.Client` as its primary transport, and
+       * keeps this one around just as a fallback for methods REST doesn't cover yet). Thin wrapper
+       * around `processRequest`.
+       */
+    request<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
     protected processRequest<T extends object | undefined>(options: RequestOptions, preparse?: (xml: string) => string): Promise<T>;
     private processRequestNative;
     private static parseParamStr;

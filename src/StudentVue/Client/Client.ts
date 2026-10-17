@@ -1,5 +1,6 @@
 import { LoginCredentials, ParsedRequestError } from '../../utils/soap/Client/Client.interfaces';
 import soap from '../../utils/soap/soap';
+import rest from '../../utils/rest/rest';
 import { AdditionalInfo, AdditionalInfoItem, ClassScheduleInfo, SchoolInfo, StudentInfo } from './Client.interfaces';
 import { StudentInfoXMLObject } from './Interfaces/xml/StudentInfo';
 import Message from '../Message/Message';
@@ -65,12 +66,155 @@ interface xmlCache{
   [identifier:string] /*district url + username + mp */ : {data:GradebookXMLObject,age:number}
 }
 
+/**
+ * The JSON gradebook format wraps camelCase keys (`courses`, `reportingPeriods`) in a
+ * `traditionalGradebook` object - `processRequest` already unwraps the outer `{ data: ... }`
+ * envelope, so this is what actually reaches here: `{ traditionalGradebook: { courses, ... } }`.
+ */
+function isGradebookJSON(obj: any): boolean {
+  const gb = obj?.traditionalGradebook;
+  return gb != null && typeof gb === 'object' && Array.isArray(gb.courses);
+}
 
-export default class Client extends soap.Client {
+/**
+ * Re-escapes a value the way Synergy serializes it into an XML attribute, then trims it like
+ * fast-xml-parser does. The XML branch parses with `processEntities: false`, so it always saw these
+ * escapes; applying them here and then running the same transforms as the XML branch (`he.decode` or
+ * nothing) gives identical output.
+ */
+function xmlAttr(v: any): string {
+  return xmlAttrUntrimmed(v).trim();
+}
+
+/**
+ * `Measure` and `MeasureDescription` are URI-encoded by XMLFactory before parsing, so their surrounding
+ * whitespace survives as `%20` and is not trimmed.
+ */
+function xmlAttrUntrimmed(v: any): string {
+  return (v == null ? "" : String(v))
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\r/g, "&#xD;")
+    .replace(/\n/g, "&#xA;")
+    .replace(/\t/g, "&#x9;");
+}
+
+/**
+ * Parses the JSON gradebook format into the same Gradebook shape the XML branch produces.
+ * Quirks of the XML branch are reproduced on purpose so the output is identical:
+ * - every string is XML-attribute-escaped and trimmed first, then decoded only where the XML branch called `he.decode`
+ * - IDs are strings (the XML parser never parses attribute values)
+ * - `score.value` comes from `displayScore` (falls back to `"Not Graded"` when absent) - the XML
+ *   branch's `@_Score` lookup never matches (Synergy's XML has no `Score` attribute, only
+ *   `DisplayScore`), so it's likely always `"Not Graded"` there too, but that's a separate,
+ *   pre-existing bug in the XML branch left untouched here
+ * - courses without marks get the `"none"` placeholder mark
+ * - resources are always `[]`
+ */
+function parseGradebookJSON(json: any, reportingPeriodIndex?: number | null): Gradebook {
+  const parseDate = (d: string) => dateParse(d, "M/dd/yyyy", new Date());
+
+  json = json.traditionalGradebook;
+  const periods: any[] = json.reportingPeriods ?? [];
+  const current = json.reportingPeriod ?? {};
+
+  return {
+    error: xmlAttr(json.errorMessage),
+    type: xmlAttr(json.type),
+    reportingPeriod: {
+      current: {
+        index:
+          reportingPeriodIndex ??
+          Number(periods.find((x) => x.gradePeriod === current.gradePeriod)?.index),
+        date: {
+          start: parseDate(current.startDate),
+          end: parseDate(current.endDate),
+        },
+        name: xmlAttr(current.gradePeriod),
+      },
+      available: periods.map((period) => ({
+        date: { start: parseDate(period.startDate), end: parseDate(period.endDate) },
+        name: xmlAttr(period.gradePeriod),
+        index: Number(period.index),
+      })),
+    },
+    courses: (json.courses ?? []).map((course: any) => ({
+      courseID: course.courseID != null ? xmlAttr(course.courseID) : "",
+      period: Number(course.period),
+      title: he.decode(xmlAttr(course.title)),
+      room: xmlAttr(course.room),
+      staff: {
+        name: xmlAttr(course.staff),
+        email: xmlAttr(course.staffEMail),
+        staffGu: xmlAttr(course.staffGU),
+      },
+      marks: course.marks?.length
+        ? (course.marks.map((mark: any) => ({
+            name: xmlAttr(mark.markName),
+            calculatedScore: {
+              string: xmlAttr(mark.calculatedScoreString),
+              raw: Number(mark.calculatedScoreRaw),
+            },
+            weightedCategories: (mark.gradeCalculationSummary ?? []).map(
+              (weighted: any) =>
+                ({
+                  type: he.decode(xmlAttr(weighted.type)),
+                  calculatedMark: xmlAttr(weighted.calculatedMark),
+                  weight: {
+                    evaluated: xmlAttr(weighted.weightedPct),
+                    standard: xmlAttr(weighted.weight),
+                  },
+                  points: {
+                    current: Number(weighted.points),
+                    possible: Number(weighted.pointsPossible),
+                  },
+                } as WeightedCategory)
+            ),
+            assignments: (mark.assignments ?? []).map(
+              (assignment: any) =>
+                ({
+                  gradebookId: xmlAttr(assignment.gradebookID),
+                  name: xmlAttrUntrimmed(assignment.measure),
+                  type: he.decode(xmlAttr(assignment.type)),
+                  date: {
+                    start: parseDate(assignment.date),
+                    due: parseDate(assignment.dueDate),
+                  },
+                  score: {
+                    type: he.decode(xmlAttr(assignment.scoreType)),
+                    value: assignment.displayScore != null ? he.decode(xmlAttr(assignment.displayScore)) : "Not Graded",
+                  },
+                  points: xmlAttr(assignment.points),
+                  notes: he.decode(xmlAttr(assignment.notes)),
+                  teacherId: xmlAttr(assignment.teacherID),
+                  description: xmlAttrUntrimmed(assignment.measureDescription),
+                  hasDropbox: Boolean(assignment.hasDropBox),
+                  studentId: xmlAttr(assignment.studentID),
+                  dropboxDate: {
+                    start: parseDate(assignment.dropStartDate),
+                    end: parseDate(assignment.dropEndDate),
+                  },
+                  resources: [],
+                } as Assignment)
+            ),
+          })) as Mark[])
+        : ([{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[]),
+    })),
+  } as Gradebook;
+}
+
+export default class Client extends rest.Client {
   private hostUrl: string;
-  constructor(credentials: LoginCredentials, proxyUrl:string,hostUrl: string) {
-    super(credentials,proxyUrl);
-    this.hostUrl = hostUrl;
+  // The legacy transport. REST (the base class, `super`) is primary now; SOAP is kept around by
+  // composition only as a fallback/for the methods that haven't been moved to REST yet, since
+  // their REST JSON shapes haven't been confirmed - see rest/Client/Client.ts for caveats.
+  private soapClient: InstanceType<typeof soap.Client>;
+  constructor(credentials: LoginCredentials, proxyUrl: string = 'native') {
+    super(credentials, proxyUrl);
+    this.hostUrl = new URL(credentials.districtUrl).origin + '/';
+    this.soapClient = new soap.Client(credentials, proxyUrl);
   }
 
   /**
@@ -78,8 +222,8 @@ export default class Client extends soap.Client {
    */
   public validateCredentials(): Promise<void> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<ParsedRequestError>({ validateErrors: false, methodName: 'fuck'})
+      this.soapClient
+        .request<ParsedRequestError>({ validateErrors: false, methodName: 'fuck'})
         .then((response) => {
           if (response.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("A critical error has occurred")) {res();}
           else{rej(new RequestException(response))};
@@ -101,8 +245,8 @@ export default class Client extends soap.Client {
    */
   public documents(): Promise<[Document[],any]> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<DocumentXMLObject>({
+      this.soapClient
+        .request<DocumentXMLObject>({
           methodName: 'GetStudentDocumentInitialData',
           paramStr: { childIntId: 0 },
         })
@@ -135,8 +279,8 @@ export default class Client extends soap.Client {
    */
   public reportCards(): Promise<[ReportCard[],any]> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<ReportCardsXMLObject>({
+      this.soapClient
+        .request<ReportCardsXMLObject>({
           methodName: 'GetReportCardInitialData',
           paramStr: { childIntId: 0 },
         })
@@ -166,8 +310,8 @@ export default class Client extends soap.Client {
    */
   public schoolInfo(): Promise<[SchoolInfo,any]> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<SchoolInfoXMLObject&{extraData?:any}>({
+      this.soapClient
+        .request<SchoolInfoXMLObject&{extraData?:any}>({
           methodName: 'StudentSchoolInfo',
           paramStr: { childIntID: 0 },
         })
@@ -215,8 +359,8 @@ export default class Client extends soap.Client {
    */
   public schedule(termIndex?: number): Promise<[any,any]> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<any>({
+      this.soapClient
+        .request<any>({
           methodName: 'StudentClassList',
           paramStr: { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) },
         })
@@ -276,8 +420,8 @@ export default class Client extends soap.Client {
    */
   public attendance(): Promise<[Attendance,any]> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<AttendanceXMLObject>({
+      this.soapClient
+        .request<AttendanceXMLObject>({
           methodName: 'Attendance',
           paramStr: {
             childIntId: 0,
@@ -357,7 +501,9 @@ export default class Client extends soap.Client {
 
 
       const parseBranch = (xmlObject: GradebookXMLObject | any) => {
-  
+          if (isGradebookJSON(xmlObject)) {
+            return res([parseGradebookJSON(xmlObject, reportingPeriodIndex), xmlObject.extraData]);
+          }
 
           try{
             if (xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("The user name or password is incorrect")||xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("Invalid user id or password")) {rej(new Error("Invalid/Incorrect Username or Password"));}
@@ -508,24 +654,30 @@ export default class Client extends soap.Client {
       
     
   const fetchBranch = (): Promise<GradebookXMLObject> => {
+  const gradebookParams = {
+    childIntId: 0,
+    ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
+    ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {}),
+  };
+
   return super
-    .processRequest<GradebookXMLObject & { extraData?: any }>(
-      {
-        methodName: 'Gradebook',
-        paramStr: {
-          childIntId: 0,
-          ...(reportingPeriodIndex != null ? { ReportPeriod: reportingPeriodIndex } : {}),
-          ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {}),
+    .processRequest<GradebookXMLObject & { extraData?: any }>({
+      methodName: 'Gradebook',
+      paramStr: gradebookParams,
+    })
+    .catch((restError) => {
+      console.log('REST Gradebook fetch failed, falling back to SOAP:', restError);
+      return this.soapClient.request<GradebookXMLObject & { extraData?: any }>(
+        {
+          methodName: 'Gradebook',
+          paramStr: gradebookParams,
         },
-      },
-      (xml) =>
-        new XMLFactory(xml)
-          .encodeAttribute('MeasureDescription', 'HasDropBox')
-          .encodeAttribute('Measure', 'Type')
-          .toString()
-    )
-    .then((result) => {
-      return result;
+        (xml) =>
+          new XMLFactory(xml)
+            .encodeAttribute('MeasureDescription', 'HasDropBox')
+            .encodeAttribute('Measure', 'Type')
+            .toString()
+      );
     });
 };
 
@@ -583,8 +735,8 @@ export default class Client extends soap.Client {
    */
   public messages(): Promise<[Message[],any]> {
     return new Promise((res, rej) => {
-      super
-        .processRequest<MessageXMLObject>(
+      this.soapClient
+        .request<MessageXMLObject>(
           {
             methodName: 'GetPXPMessages',
             paramStr: { childIntId: 0 },
@@ -610,8 +762,8 @@ export default class Client extends soap.Client {
   public ChildList():Promise<[StudentInfo,any]>{
     console.log("sanity check")
     return new Promise<[StudentInfo,any]>((res,rej)=>{
-      super
-        .processRequest({methodName:"ChildList"})
+      this.soapClient
+        .request({methodName:"ChildList"})
           .then((xmlObject:any)=>{
             const raw=xmlObject;
             xmlObject=xmlObject.ChildList[0];
@@ -671,8 +823,8 @@ export default class Client extends soap.Client {
    */
   public studentInfo(): Promise<[StudentInfo,any]> {
     return new Promise<[StudentInfo,any]>((res, rej) => {
-      super
-        .processRequest<StudentInfoXMLObject>({
+      this.soapClient
+        .request<StudentInfoXMLObject>({
           methodName: 'StudentInfo',
           paramStr: { childIntId: 0 },
         })
@@ -764,7 +916,7 @@ export default class Client extends soap.Client {
   }
 
   private fetchEventsWithinInterval(date: Date) {
-    return super.processRequest<CalendarXMLObject>(
+    return this.soapClient.request<CalendarXMLObject>(
       {
         methodName: 'StudentCalendar',
         paramStr: { childIntId: 0, RequestDate: date.toISOString() },

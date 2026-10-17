@@ -81,7 +81,7 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
         isParent: credentials.isParent,
         encrypted:credentials.encrypted
       },
-      proxyUrl,url
+      proxyUrl
     );
       getGradebooks(client,null,null)
       .then((response) => {

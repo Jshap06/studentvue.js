@@ -1,31 +1,42 @@
+/**
+ * REST migration TODO - what's unconfirmed or unmigrated, and why (see each method's own
+ * comments for detail):
+ * - ChildList (GetChildListData): concurrent-school mapping unconfirmed - no sample from a
+ *   concurrently-enrolled student.
+ * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
+ *   additionalInfo unconfirmed - sample was truncated before reaching them.
+ * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
+ *   unconfirmed - no concurrent-enrollment or weekday sample yet.
+ * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was
+ *   truncated. dailyAttendance (twice-daily schools) unsupported entirely - different shape,
+ *   needs its own type, rejects with an explicit error for now.
+ * - reportCards, messages, schoolInfo, calendar: not migrated yet - no REST method name/shape
+ *   confirmed, still SOAP-only via `this.soapClient`.
+ * - validateCredentials: intentionally left on SOAP - relies on a SOAP-specific bogus-method
+ *   error-message trick, no REST equivalent attempted.
+ */
 import { LoginCredentials, ParsedRequestError } from '../../utils/soap/Client/Client.interfaces';
 import soap from '../../utils/soap/soap';
 import rest from '../../utils/rest/rest';
-import { AdditionalInfo, AdditionalInfoItem, ClassScheduleInfo, SchoolInfo, StudentInfo } from './Client.interfaces';
-import { StudentInfoXMLObject } from './Interfaces/xml/StudentInfo';
+import { SchoolInfo, StudentInfo } from './Client.interfaces';
 import Message from '../Message/Message';
 import { MessageXMLObject } from '../Message/Message.xml';
 import { AssignmentEventXMLObject, CalendarXMLObject, RegularEventXMLObject } from './Interfaces/xml/Calendar';
 import { AssignmentEvent, Calendar, CalendarOptions, Event, HolidayEvent, RegularEvent } from './Interfaces/Calendar';
 import { eachMonthOfInterval, parse } from 'date-fns';
-import { FileResourceXMLObject, GradebookXMLObject, URLResourceXMLObject } from './Interfaces/xml/Gradebook';
-import { AttendanceXMLObject } from './Interfaces/xml/Attendance';
+import { GradebookXMLObject } from './Interfaces/xml/Gradebook';
 import EventType from '../../Constants/EventType';
 import _, { result } from 'lodash';
-import { Assignment, FileResource, Gradebook, Mark, URLResource, WeightedCategory } from './Interfaces/Gradebook';
-import ResourceType from '../../Constants/ResourceType';
+import { Assignment, Gradebook, Mark, WeightedCategory } from './Interfaces/Gradebook';
 import { AbsentPeriod, Attendance, PeriodInfo } from './Interfaces/Attendance';
-import { ScheduleXMLObject } from './Interfaces/xml/Schedule';
-import { Schedule } from './Client.interfaces';
 import { SchoolInfoXMLObject } from './Interfaces/xml/SchoolInfo';
 import { ReportCardsXMLObject } from '../ReportCard/ReportCard.xml';
-import { DocumentXMLObject } from '../Document/Document.xml';
 import ReportCard from '../ReportCard/ReportCard';
-import Document from '../Document/Document';
+import Document, { StudentDocumentDataJSON } from '../Document/Document';
 import RequestException from '../RequestException/RequestException';
 import XMLFactory from '../../utils/XMLFactory/XMLFactory';
 import cache from '../../utils/cache/cache';
-import { optional, asyncPoolAll } from './Client.helpers';
+import { asyncPoolAll } from './Client.helpers';
 import he from "he";
 import { el, id } from 'date-fns/locale';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -74,6 +85,372 @@ interface xmlCache{
 function isGradebookJSON(obj: any): boolean {
   const gb = obj?.traditionalGradebook;
   return gb != null && typeof gb === 'object' && Array.isArray(gb.courses);
+}
+
+/**
+ * The JSON child-list format wraps a `childrenList` array (one entry per child the session has
+ * access to) inside a `children` object - `processRequest` already unwraps the outer
+ * `{ data: ... }` envelope, so this is what actually reaches here:
+ * `{ children: { allModules, childrenList: [...] } }`.
+ */
+function isChildListJSON(obj: any): boolean {
+  const children = obj?.children;
+  return children != null && typeof children === 'object' && Array.isArray(children.childrenList);
+}
+
+/**
+ * Parses the JSON child-list format into the same (deliberately partial) shape the XML branch's
+ * `ChildList()` fallback produces - see the comment on that branch for which `StudentInfo` fields
+ * this does and doesn't fill in.
+ *
+ * Unconfirmed: a concurrently-enrolled student's second school was never observed in a REST
+ * sample. The XML branch nests it under a single child's `ConcurrentSchools`; this guesses the
+ * REST equivalent is one extra `childrenList` entry per concurrent school for the same student
+ * (entries after the first), since there's no other field that obviously carries it. Revisit if
+ * a concurrent-enrollment sample ever turns up.
+ */
+function parseChildListJSON(json: any): StudentInfo {
+  const children: any[] = json.children.childrenList ?? [];
+  const child = children[0] ?? {};
+
+  const m: any = {
+    student: {
+      name: child.childName,
+      lastName: 'not available',
+      nickname: 'not available',
+    },
+    photo: child.photo ?? undefined,
+    counselor: undefined,
+    currentSchool: child.organizationName,
+    id: child.childPermID ?? undefined,
+    orgYearGu: child.orgYearGU ?? undefined,
+    gender: 'null',
+    grade: child.grade ?? undefined,
+  };
+
+  if (children.length > 1) {
+    m.schools = children.slice(1).map((c: any) => ({
+      name: c.organizationName,
+      GU: c.orgYearGU,
+    }));
+  }
+
+  return m as StudentInfo;
+}
+
+/**
+ * The JSON student-info format carries the real payload in `studentInfoDetailXML` (seen with
+ * `"type": "Detail"`), with a sibling `studentInfoXML` key that was `null` in the only sample
+ * seen so far - `processRequest` already unwraps the outer `{ data: ... }` envelope, so this is
+ * what actually reaches here: `{ studentInfoXML: null, studentInfoDetailXML: { formattedName, ... } }`.
+ * Falls back to `studentInfoXML` if that's ever the populated one instead.
+ */
+function isStudentInfoJSON(obj: any): boolean {
+  const info = obj?.studentInfoDetailXML ?? obj?.studentInfoXML;
+  return info != null && typeof info === 'object';
+}
+
+/**
+ * Parses the JSON student-info format into the same shape the XML branch's `studentInfo()`
+ * produces.
+ *
+ * Unconfirmed: the only REST sample seen was truncated right after `photo`, before `dentist`,
+ * `physician`, `emergencyContacts`, `lockerInfoRecords` and `userDefinedGroupBoxes` would have
+ * appeared (if present at all - they may simply be absent for a student with none of those). The
+ * field names/shapes below for those five are guessed by analogy with the confirmed fields'
+ * camelCase convention (e.g. `permID`, `orgYearGU`, `counselorStaffGU`), not observed directly.
+ * Revisit once a fuller sample turns up.
+ */
+function parseStudentInfoJSON(json: any): StudentInfo {
+  const info: any = json.studentInfoDetailXML ?? json.studentInfoXML ?? {};
+
+  return {
+    student: {
+      name: info.formattedName,
+      lastName: info.lastNameGoesBy,
+      nickname: info.nickName,
+    },
+    birthDate: dateParse(info.birthDate, 'M/dd/yyyy', new Date()),
+    track: info.track ?? undefined,
+    address: info.address ?? undefined,
+    photo: info.photo ?? undefined,
+    counselor:
+      info.counselorName && info.counselorEmail && info.counselorStaffGU
+        ? {
+            name: info.counselorName,
+            email: info.counselorEmail,
+            staffGu: info.counselorStaffGU,
+          }
+        : undefined,
+    currentSchool: info.currentSchool,
+    // Unconfirmed - see function comment.
+    dentist: info.dentist
+      ? {
+          name: info.dentist.name,
+          phone: info.dentist.phone,
+          extn: info.dentist.extn,
+          office: info.dentist.office,
+        }
+      : undefined,
+    // Unconfirmed - see function comment.
+    physician: info.physician
+      ? {
+          name: info.physician.name,
+          phone: info.physician.phone,
+          extn: info.physician.extn,
+          hospital: info.physician.hospital,
+        }
+      : undefined,
+    id: info.permID ?? undefined,
+    orgYearGu: info.orgYearGU ?? undefined,
+    phone: info.phone ?? undefined,
+    email: info.eMail ?? undefined,
+    // Unconfirmed - see function comment.
+    emergencyContacts: Array.isArray(info.emergencyContacts)
+      ? info.emergencyContacts.map((contact: any) => ({
+          name: contact.name,
+          phone: {
+            home: contact.homePhone,
+            mobile: contact.mobilePhone,
+            other: contact.otherPhone,
+            work: contact.workPhone,
+          },
+          relationship: contact.relationship,
+        }))
+      : [],
+    gender: info.gender ?? undefined,
+    grade: info.grade ?? undefined,
+    // Unconfirmed - see function comment.
+    lockerInfoRecords: info.lockerInfoRecords ?? undefined,
+    homeLanguage: info.homeLanguage ?? undefined,
+    homeRoom: info.homeRoom ?? undefined,
+    homeRoomTeacher: {
+      email: info.homeRoomTchEMail ?? undefined,
+      name: info.homeRoomTch ?? undefined,
+      staffGu: info.homeRoomTchStaffGU ?? undefined,
+    },
+    // Unconfirmed - see function comment.
+    additionalInfo: Array.isArray(info.userDefinedGroupBoxes)
+      ? info.userDefinedGroupBoxes.map((box: any) => ({
+          id: box.groupBoxID,
+          type: box.groupBoxLabel,
+          vcId: box.vcID,
+          items: (box.userDefinedItems ?? []).map((item: any) => ({
+            source: {
+              element: item.sourceElement,
+              object: item.sourceObject,
+            },
+            vcId: item.vcID,
+            value: item.value,
+            type: item.itemType,
+          })),
+        }))
+      : [],
+    //@ts-ignore You will never make me use typeScript.
+  } as StudentInfo;
+}
+
+/**
+ * The JSON class-list format (requested with `loadAllTerms: true`, same as the REST client
+ * always sends) carries the payload in `studentClassScheduleForAllTerms`, with a sibling
+ * `studentClassSchedule` key that was `null` in the only sample seen - that sibling is presumably
+ * what's populated instead for a single-term (`loadAllTerms: false`) request, mirroring the old
+ * SOAP shape's singular `StudentClassSchedule` wrapper, but that variant hasn't been observed
+ * over REST. `processRequest` already unwraps the outer `{ data: ... }` envelope, so this is what
+ * actually reaches here: `{ studentClassScheduleForAllTerms: { termLists, studentClassScheduleForTerms: [...] }, studentClassSchedule: null }`.
+ */
+function isStudentClassListJSON(obj: any): boolean {
+  const sched = obj?.studentClassScheduleForAllTerms;
+  return sched != null && typeof sched === 'object' && Array.isArray(sched.studentClassScheduleForTerms);
+}
+
+/**
+ * Parses the JSON class-list format into the same shape the XML branch's `schedule()` produces
+ * (`termName`, `termIndex`, `terms`, `mainClasses`, `conClasses?`, `today`).
+ *
+ * Unlike the old SOAP call (which fetches one term at a time via an optional `TermIndex` param),
+ * the REST request always asks for every term at once (`loadAllTerms: true`) and this picks the
+ * relevant one afterward - by `termIndex` if given, else whichever one the response itself
+ * flags as current (`termLists`'s/the wrapper's own `termIndex`).
+ *
+ * IMPORTANT - concurrent-school enrollment (`conClasses`) is a real, actively-used feature (a
+ * student split across two schools, e.g. a home school + a magnet/CTE program) - this is NOT a
+ * rare edge case to shrug off. It just hasn't been verifiable here because no REST sample from a
+ * concurrently-enrolled student has been available (every sample's
+ * `concurrentSchoolStudentClassScheduleForAllTermss` was `[]`). The mapping below is a best-effort
+ * guess - one entry per concurrent school, each shaped like the main schedule's own
+ * `studentClassScheduleForTerms` - modeled directly on the OLD SOAP implementation this replaced
+ * (see git history for this file's `schedule()` before the REST migration, or the SOAP branch
+ * still further back), which read:
+ *   `StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0]
+ *     .ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing`
+ *   for the classes, and `...ConcurrentSchoolStudentClassSchedule[0]['@_SchoolName']` for the
+ *   school name (`conClasses.conName`).
+ * Treat this as unverified and get a real concurrent-enrollment REST sample to confirm/fix the
+ * field names (`concurrentSchoolStudentClassScheduleForAllTermss` entry shape in particular)
+ * before trusting it in production - don't let it silently bitrot into "nobody checked this
+ * actually works."
+ *
+ * IMPORTANT - `today` (the old XML branch's `TodayScheduleInfoData`) is in the same boat, not a
+ * lesser one: the sample used to build this was captured on a weekend, when there's no school
+ * day and thus genuinely no "today" schedule to return - the old XML branch's own logic treats
+ * that as the expected empty case too (it falls back to `today = false` when
+ * `TodayScheduleInfoData[0].SchoolInfos[0]` comes back empty). So the absence of a `today` field
+ * in the sample is consistent with "no data to show," not "REST dropped this feature" - the
+ * actual field name/shape for a populated weekday response is still completely unknown and
+ * un-guessed here (unlike `conClasses`, which at least has a guessed mapping). Revisit this whole
+ * method with a weekday REST sample to find the real field and stop hardcoding `false`
+ * unconditionally.
+ */
+function parseStudentClassListJSON(json: any, termIndex?: number | null): any {
+  const sched = json.studentClassScheduleForAllTerms;
+  const terms: any[] = sched.termLists ?? [];
+  const termSchedules: any[] = sched.studentClassScheduleForTerms ?? [];
+
+  const targetTermIndex = termIndex != null ? String(termIndex) : sched.termIndex;
+  const currentTermSchedule =
+    termSchedules.find((t: any) => t.thisTermIndex === targetTermIndex) ?? termSchedules[0] ?? {};
+
+  const toClass = (course: any) => ({
+    name: course.courseTitle,
+    period: course.period,
+    teacher: course.teacher,
+    room: course.roomName,
+  });
+
+  const response: any = {};
+  response.termName = currentTermSchedule.thisTermIndexName ?? sched.termIndexName;
+  response.termIndex = currentTermSchedule.thisTermIndex ?? sched.termIndex;
+  response.terms = terms.map((term: any) => ({
+    start: term.beginDate,
+    end: term.endDate,
+    termIndex: term.termIndex,
+    termName: term.termName,
+  }));
+  response.mainClasses = (currentTermSchedule.classLists ?? []).map(toClass);
+
+  // IMPORTANT - unverified, not a low-priority edge case. See the big comment on this function
+  // for why (concurrent enrollment is a real, used feature; no REST sample for it exists yet)
+  // and the old SOAP field path this was modeled on.
+  const conSchedules: any[] = sched.concurrentSchoolStudentClassScheduleForAllTermss ?? [];
+  if (conSchedules.length > 0) {
+    const conTermSchedules: any[] = conSchedules[0]?.studentClassScheduleForTerms ?? [];
+    const conCurrent = conTermSchedules.find((t: any) => t.thisTermIndex === targetTermIndex) ?? conTermSchedules[0];
+    if (conCurrent) {
+      response.conClasses = (conCurrent.classLists ?? []).map(toClass);
+      response.conClasses.conName = conCurrent.schoolName;
+    }
+  }
+
+  // IMPORTANT - unverified, not low stakes. The sample behind this was captured on a weekend
+  // (so "no today data" was the correct/expected result then), but the real field for a populated
+  // weekday response is still unknown - see the big comment on this function. Needs a weekday
+  // REST sample to fix properly; don't mistake this hardcoded `false` for a settled answer.
+  response.today = false;
+
+  return response;
+}
+
+/**
+ * The JSON document-list format carries the payload in `studentDocuments` - `processRequest`
+ * already unwraps the outer `{ data: ... }` envelope, so this is what actually reaches here:
+ * `{ studentDocuments: { studentDocumentDatas: [...], documentSetupDatas, changesPending, ... } }`.
+ * Confirmed against a real sample.
+ */
+function isStudentDocumentsJSON(obj: any): boolean {
+  const docs = obj?.studentDocuments;
+  return docs != null && typeof docs === 'object' && Array.isArray(docs.studentDocumentDatas);
+}
+
+/**
+ * The JSON attendance format carries the payload in `periodAttendance` - `processRequest`
+ * already unwraps the outer `{ data: ... }` envelope, so this is what actually reaches here:
+ * `{ dailyAttendance: null, periodAttendance: { type, absences: [...], ... } }`. Confirmed
+ * against a real sample (`dailyAttendance` was `null` in it, `periodAttendance` was populated).
+ *
+ * Deliberately does NOT treat `dailyAttendance` as an alternate/equivalent shape to fall back to.
+ * A default-value schema dump found elsewhere in the bundle shows `dailyAttendance`'s totals
+ * (`totalExcused`, `totalTardies`, etc.) are plain numbers, not per-period arrays, and its
+ * `absences` items have no nested `periods` breakdown at all - because daily (twice-daily, AM/PM)
+ * attendance has no concept of "periods" to begin with. The old SOAP `Attendance` type (and this
+ * migration) is period-based end to end (`AbsentPeriod`, `PeriodInfo`), so there's no honest way
+ * to force daily-attendance data into that shape - `attendance()` rejects with a clear message
+ * instead of silently fabricating fake periods. Properly supporting daily attendance would need
+ * a separate output type and its own parser, not a branch here.
+ */
+function isAttendanceJSON(obj: any): boolean {
+  return obj?.periodAttendance != null && typeof obj.periodAttendance === 'object';
+}
+
+/**
+ * Parses REST's `periodAttendance` into the same shape the XML branch's `attendance()` produces.
+ *
+ * Confirmed against a real sample: `type`, `schoolName`, `startPeriod`, `endPeriod`,
+ * `periodCount`, and `absences[]` with `absenceDate`, `reason`, `note`, `codeAllDayDescription`,
+ * and a `periods[]` breakdown with `number`, `name`, `reason`, `course`, `staff`, `staffEMail`,
+ * `staffGU`, `orgYearGU`.
+ *
+ * NOT confirmed against that sample (it was truncated before reaching them, if they're even
+ * present for every response): the per-period total arrays (`totalExcused`, `totalTardies`,
+ * `totalUnexcused`, `totalActivities`, `totalUnexcusedTardies`), each presumably an array of
+ * `{ number, total }` - one entry per period - mirroring the per-period `periods[]` items' own
+ * `number` field. This is inferred from two independent sources found elsewhere in the bundle: a
+ * default-value schema dump listing these exact keys on `PeriodAttendance`, and real UI code
+ * reading `periodAttendance.totalTardies[i].total`. Confident these keys exist and roughly this
+ * shape, but the `number` field on each entry specifically (vs. relying on array index) is a
+ * guess by analogy with `periods[]`. Revisit if a fuller sample ever turns up.
+ */
+function parseAttendanceJSON(json: any): Attendance {
+  const att: any = json.periodAttendance;
+  const absences: any[] = att.absences ?? [];
+  const periodCount = Number(att.periodCount ?? 0);
+
+  const totalFor = (key: string, i: number): number => Number(att[key]?.[i]?.total ?? 0);
+
+  return {
+    type: att.type,
+    period: {
+      total: periodCount,
+      start: Number(att.startPeriod ?? 0),
+      end: Number(att.endPeriod ?? 0),
+    },
+    schoolName: att.schoolName,
+    absences: absences.map((absence: any) => ({
+      date: dateParse(absence.absenceDate, 'M/dd/yyyy', new Date()),
+      reason: absence.reason,
+      note: absence.note,
+      description: absence.codeAllDayDescription,
+      periods: (absence.periods ?? []).map(
+        (period: any) =>
+          ({
+            period: Number(period.number),
+            name: period.name,
+            reason: period.reason,
+            course: period.course,
+            staff: {
+              name: period.staff,
+              staffGu: period.staffGU,
+              email: period.staffEMail,
+            },
+            orgYearGu: period.orgYearGU,
+          } as AbsentPeriod)
+      ),
+    })),
+    periodInfos: Array.from(
+      { length: periodCount },
+      (_, i) =>
+        ({
+          period: Number(att.totalActivities?.[i]?.number ?? i),
+          total: {
+            excused: totalFor('totalExcused', i),
+            tardies: totalFor('totalTardies', i),
+            unexcused: totalFor('totalUnexcused', i),
+            activities: totalFor('totalActivities', i),
+            unexcusedTardies: totalFor('totalUnexcusedTardies', i),
+          },
+        } as PeriodInfo)
+    ),
+  } as Attendance;
 }
 
 /**
@@ -245,23 +622,20 @@ export default class Client extends rest.Client {
    */
   public documents(): Promise<[Document[],any]> {
     return new Promise((res, rej) => {
-      this.soapClient
-        .request<DocumentXMLObject>({
-          methodName: 'GetStudentDocumentInitialData',
-          paramStr: { childIntId: 0 },
+      super
+        .processRequest<any>({
+          methodName: 'GetStudentDocuments',
+          paramStr: { childIntID: 0, languageCode: 'ENG' },
         })
-        .then((xmlObject) => {
-          if(typeof(xmlObject['StudentDocuments'][0].StudentDocumentDatas[0])=="string"){console.log("where is my mind");return res([[],
-            // @ts-ignore
-            xmlObject.extraData])}
-          else{
+        .then((result: any) => {
+          if (!isStudentDocumentsJSON(result)) {
+            return rej(new Error('Unexpected GetStudentDocuments REST response shape'));
+          }
+          const docs: StudentDocumentDataJSON[] = result.studentDocuments.studentDocumentDatas ?? [];
           res([
-            xmlObject['StudentDocuments'][0].StudentDocumentDatas[0].StudentDocumentData.map(
-              (xml: any) => new Document(xml, super.credentials)
-            ),
-            //@ts-ignore
-            xmlObject.extraData]
-          );}
+            docs.map((doc) => new Document(doc, super.credentials)),
+            result.extraData,
+          ]);
         })
         .catch(rej);
     });
@@ -351,66 +725,35 @@ export default class Client extends rest.Client {
   /**
    * Gets the schedule of the student
    * @param {number} termIndex The index of the term.
-   * @returns {Promise<Schedule>} Returns the schedule of the student
+   * @returns {Promise<[any, any]>} Returns the schedule of the student
    * @description
    * ```js
-   * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
+   * await schedule(0) // -> { termName: 'Semester 1', termIndex: '0', terms: [...], mainClasses: [...], today: false }
    * ```
    */
   public schedule(termIndex?: number): Promise<[any,any]> {
     return new Promise((res, rej) => {
-      this.soapClient
-        .request<any>({
+      super
+        .processRequest<any>({
           methodName: 'StudentClassList',
-          paramStr: { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) },
+          paramStr: { loadAllTerms: true, childIntID: 0 },
         })
-        .then((xmlObject:any) => {
-          var response:any={}
-          response.termName=xmlObject.StudentClassSchedule[0]['@_TermIndexName'][0]; //could sometimes be strings but fuck that
-          response.termIndex=xmlObject.StudentClassSchedule[0]['@_TermIndex'][0];
-          //for now we're not grabbing the terms for the conccurent school, they lowk don't matter
-          response.terms=xmlObject.StudentClassSchedule[0].TermLists[0].TermListing.map((term:any)=>({start:term['@_BeginDate'][0],end:term['@_EndDate'][0],termIndex:term['@_TermIndex'][0],termName:term['@_TermName'][0]}))
-          
-          response.mainClasses=xmlObject.StudentClassSchedule[0].ClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
-          var checker=false;
-          try{
-            checker=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].
-            ConSchClassLists[0].ClassListing[0]!=''
-            
-          }catch{}
-
-          
-          if(checker){
-            response.conClasses=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing.map((course:any)=>({name:course['@_CourseTitle'][0],period:course['@_Period'][0],teacher:course['@_Teacher'][0],room:course['@_RoomName'][0]}))
-            response.conClasses.conName=xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0]['@_SchoolName']
+        .then((result: any) => {
+          if (isStudentClassListJSON(result)) {
+            return res([parseStudentClassListJSON(result, termIndex), result.extraData]);
           }
-          try{
-          if(xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0]!=''){
-            response.today={}
-            response.today.main=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[0].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
-            try{
-              response.today.con=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1].Classes[0].ClassInfo.map((course:any)=>({name:course['@_ClassName'],start:course['@_StartTime'],end:course['@_EndTime'],teacher:course['@_TeacherName'],period:course['@_Period'],room:course['@_RoomName']}))
-              response.today.conName=xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1]['@_SchoolName'];
-            }catch{console.log("no concurrent")}
-          }
-          else{
-            response.today=false
-          }
-
-          
-          }catch(error){console.log(error);response.today=false}
-          res([response,xmlObject.extraData])
-          }
-
-          //@ts-ignore
-
-        )
+          rej(new Error('Unexpected StudentClassList REST response shape'));
+        })
         .catch(rej);
     });
   }
 
   /**
    * Returns the attendance of the student
+   * @param {string} orgYearGu The concurrent school's orgYearGU to fetch attendance for, if any
+   *   (same pattern as `gradebook()`'s own `orgYearGu` param). REST requires `orgYearGU` on every
+   *   call, unlike the old SOAP method - pass the student's own `orgYearGu` (from `ChildList`/
+   *   `studentInfo()`) if you don't have a concurrent school to target.
    * @returns {Promise<Attendance>} Returns an Attendance object
    * @description
    * ```js
@@ -418,65 +761,27 @@ export default class Client extends rest.Client {
    *  .then(console.log); // -> { type: 'Period', period: {...}, schoolName: 'University High School', absences: [...], periodInfos: [...] }
    * ```
    */
-  public attendance(): Promise<[Attendance,any]> {
+  public attendance(orgYearGu?: string | null): Promise<[Attendance,any]> {
     return new Promise((res, rej) => {
-      this.soapClient
-        .request<AttendanceXMLObject>({
-          methodName: 'Attendance',
-          paramStr: {
-            childIntId: 0,
-          },
+      super
+        .processRequest<any>({
+          methodName: 'GetStudentAttendanceList',
+          paramStr: { childIntID: 0, orgYearGU: orgYearGu ?? '' },
         })
-        .then((attendanceXMLObject) => {
-          const xmlObject = attendanceXMLObject.Attendance[0];
-          //@ts-ignore
-          xmlObject.extraData=attendanceXMLObject.extraData
-
-          res([{
-            type: xmlObject['@_Type'][0],
-            period: {
-              total: Number(xmlObject['@_PeriodCount'][0]),
-              start: Number(xmlObject['@_StartPeriod'][0]),
-              end: Number(xmlObject['@_EndPeriod'][0]),
-            },
-            schoolName: xmlObject['@_SchoolName'][0],
-            absences: xmlObject.Absences[0].Absence
-              ? xmlObject.Absences[0].Absence.map((absence) => ({
-                  date: dateParse(absence['@_AbsenceDate'][0],"M/dd/yyyy",new Date()),
-                  reason: absence['@_Reason'][0],
-                  note: absence['@_Note'][0],
-                  description: absence['@_CodeAllDayDescription'][0],
-                  periods: absence.Periods[0].Period.map(
-                    (period) =>
-                      ({
-                        period: Number(period['@_Number'][0]),
-                        name: period['@_Name'][0],
-                        reason: period['@_Reason'][0],
-                        course: period['@_Course'][0],
-                        staff: {
-                          name: period['@_Staff'][0],
-                          staffGu: period['@_StaffGU'][0],
-                          email: period['@_StaffEMail'][0],
-                        },
-                        orgYearGu: period['@_OrgYearGU'][0],
-                      } as AbsentPeriod)
-                  ),
-                }))
-              : [],
-            periodInfos: xmlObject.TotalActivities[0].PeriodTotal.map((pd, i) => ({
-              period: Number(pd['@_Number'][0]),
-              total: {
-                excused: Number(xmlObject.TotalExcused[0].PeriodTotal[i]['@_Total'][0]),
-                tardies: Number(xmlObject.TotalTardies[0].PeriodTotal[i]['@_Total'][0]),
-                unexcused: Number(xmlObject.TotalUnexcused[0].PeriodTotal[i]['@_Total'][0]),
-                activities: Number(xmlObject.TotalActivities[0].PeriodTotal[i]['@_Total'][0]),
-                unexcusedTardies: Number(xmlObject.TotalUnexcusedTardies[0].PeriodTotal[i]['@_Total'][0]),
-              },
-            })) as PeriodInfo[],
-          } as Attendance,
-          //@ts-ignore
-        xmlObject.extraData]
-        );
+        .then((result: any) => {
+          if (isAttendanceJSON(result)) {
+            return res([parseAttendanceJSON(result), result.extraData]);
+          }
+          if (result?.dailyAttendance != null) {
+            return rej(
+              new Error(
+                'This school uses daily (twice-daily) attendance tracking, which has a different shape ' +
+                  'than periodAttendance and is not supported by this method yet - see the comment on ' +
+                  'isAttendanceJSON/parseAttendanceJSON for what would be needed.'
+              )
+            );
+          }
+          rej(new Error('Unexpected GetStudentAttendanceList REST response shape'));
         })
         .catch(rej);
     });
@@ -504,143 +809,7 @@ export default class Client extends rest.Client {
           if (isGradebookJSON(xmlObject)) {
             return res([parseGradebookJSON(xmlObject, reportingPeriodIndex), xmlObject.extraData]);
           }
-
-          try{
-            if (xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("The user name or password is incorrect")||xmlObject.RT_ERROR[0]['@_ERROR_MESSAGE'][0].includes("Invalid user id or password")) {rej(new Error("Invalid/Incorrect Username or Password"));}
-            else{rej(new RequestException(xmlObject))};}
-          catch(e){
-        
-          res([{
-            error: xmlObject.Gradebook[0]['@_ErrorMessage'][0],
-            type: xmlObject.Gradebook[0]['@_Type'][0],
-            reportingPeriod: {
-              current: {
-                index:
-                  reportingPeriodIndex ??
-                  Number(
-                    xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.find(
-                      (x:any) => x['@_GradePeriod'][0] === xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0]
-                    )?.['@_Index'][0]
-                  ),
-                date: {
-                  start: dateParse(xmlObject.Gradebook[0].ReportingPeriod[0]['@_StartDate'][0],"M/dd/yyyy",new Date()),
-                  end: dateParse(xmlObject.Gradebook[0].ReportingPeriod[0]['@_EndDate'][0],"M/dd/yyyy",new Date()),
-                },
-                name: xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0],
-              },
-              available: xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.map((period:any) => ({
-                date: { start: dateParse(period['@_StartDate'][0],"M/dd/yyyy",new Date()), end: dateParse(period['@_EndDate'][0],"M/dd/yyyy",new Date()) },
-                name: period['@_GradePeriod'][0],
-                index: Number(period['@_Index'][0]),
-              })),
-            },
-            courses: typeof xmlObject.Gradebook[0].Courses[0]!='string' ? xmlObject.Gradebook[0].Courses[0].Course.map((course:any) => ({
-              courseID: course['@_CourseID']?.[0] ?? "",
-              period: Number(course['@_Period'][0]),
-              title: he.decode(course['@_Title'][0]),
-              room: course['@_Room'][0],
-              staff: {
-                name: course['@_Staff'][0],
-                email: course['@_StaffEMail'][0],
-                staffGu: course['@_StaffGU'][0],
-              },
-              marks: typeof(course.Marks[0])!=='string' ? (course.Marks[0].Mark.map((mark:any) => ({
-                name: mark['@_MarkName'][0],
-                calculatedScore: {
-                  string: mark['@_CalculatedScoreString'][0],
-                  raw: Number(mark['@_CalculatedScoreRaw'][0]),
-                },
-                weightedCategories:
-                  typeof mark['GradeCalculationSummary'][0] !== 'string'
-                    ? mark['GradeCalculationSummary'][0].AssignmentGradeCalc.map(
-                        (weighted: { [x: string]: any[]; }) =>
-                          ({
-                            type: he.decode(weighted['@_Type'][0]),
-                            calculatedMark: weighted['@_CalculatedMark'][0],
-                            weight: {
-                              evaluated: weighted['@_WeightedPct'][0],
-                              standard: weighted['@_Weight'][0],
-                            },
-                            points: {
-                              current: Number(weighted['@_Points'][0]),
-                              possible: Number(weighted['@_PointsPossible'][0]),
-                            },
-                          } as WeightedCategory)
-                      )
-                    : [],
-                assignments:
-                  typeof mark.Assignments[0] !== 'string'
-                    ? (mark.Assignments[0].Assignment.map((assignment:any) => ({
-                        gradebookId: assignment['@_GradebookID'][0],
-                        name: decodeURI(assignment['@_Measure'][0]),
-                        type: he.decode(assignment['@_Type'][0]),
-                        date: {
-                          start: dateParse(assignment['@_Date'][0],"M/dd/yyyy",new Date()),
-                          due: dateParse(assignment['@_DueDate'][0],"M/dd/yyyy",new Date()),
-                        },
-                        score: {
-                          type: he.decode(assignment['@_ScoreType'][0]),
-                          value: assignment['@_Score'] !== undefined ? assignment['@_Score'] : "Not Graded",
-                        },
-                        points: assignment['@_Points'][0],
-                        notes: he.decode(assignment['@_Notes'][0]),
-                        teacherId: assignment['@_TeacherID'][0],
-                        description: decodeURI(assignment['@_MeasureDescription'][0]),
-                        hasDropbox: JSON.parse(assignment['@_HasDropBox'][0]),
-                        studentId: assignment['@_StudentID'][0],
-                        dropboxDate: {
-                          start: dateParse(assignment['@_DropStartDate'][0],"M/dd/yyyy",new Date()),
-                          end: dateParse(assignment['@_DropEndDate'][0],"M/dd/yyyy",new Date()),
-                        },
-                        resources:
-                          typeof assignment.Resources[0] !== 'string'
-                            ? /*(assignment.Resources[0].Resource.map((rsrc:any) => {
-                                switch (rsrc['@_Type'][0]) {
-                                  case 'File': {
-                                    const fileRsrc = rsrc as FileResourceXMLObject;
-                                    return {
-                                      type: ResourceType.FILE,
-                                      file: {
-                                        type: fileRsrc['@_FileType'][0],
-                                        name: fileRsrc['@_FileName'][0],
-                                        uri: this.hostUrl + fileRsrc['@_ServerFileName'][0],
-                                      },
-                                      resource: {
-                                        date: dateParse(fileRsrc['@_ResourceDate'][0],"M/dd/yyyy",new Date()),
-                                        id: fileRsrc['@_ResourceID'][0],
-                                        name: fileRsrc['@_ResourceName'][0],
-                                      },
-                                    } as FileResource;
-                                  }
-                                  case 'URL': {
-                                    const urlRsrc = rsrc as URLResourceXMLObject;
-                                    return {
-                                      url: urlRsrc['@_URL'] !== undefined ? urlRsrc['@_URL'] : "Not Given",
-                                      type: ResourceType.URL,
-                                      resource: {
-                                        date: dateParse(urlRsrc['@_ResourceDate'][0],"M/dd/yyyy",new Date()),
-                                        id: urlRsrc['@_ResourceID'][0],
-                                        name: urlRsrc['@_ResourceName'][0],
-                                        description: urlRsrc['@_ResourceDescription'][0],
-                                      },
-                                      path: urlRsrc['@_ServerFileName'][0],
-                                    } as URLResource;
-                                  }
-                                  default:
-                                    rej(
-                                      `Type ${rsrc['@_Type'][0]} does not exist as a type. Add it to type declarations.`
-                                    );
-                                }
-                              }) as (FileResource | URLResource)[]) */ 
-                               //Obviously this is an insanely negligent fix. Just saying to complete hell with the resource. But, grade melon doesn't use it. So I don't care.
-                           [] : [],
-                      })) as Assignment[])
-                    : [],
-              }))) as Mark[]:[{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],
-            })) : [],
-          } as Gradebook,
-        xmlObject.extraData]
-        );}
+          rej(new Error('Unexpected Gradebook REST response shape'));
         }
 
         async function mykeysbro(){
@@ -660,25 +829,10 @@ export default class Client extends rest.Client {
     ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {}),
   };
 
-  return super
-    .processRequest<GradebookXMLObject & { extraData?: any }>({
-      methodName: 'Gradebook',
-      paramStr: gradebookParams,
-    })
-    .catch((restError) => {
-      console.log('REST Gradebook fetch failed, falling back to SOAP:', restError);
-      return this.soapClient.request<GradebookXMLObject & { extraData?: any }>(
-        {
-          methodName: 'Gradebook',
-          paramStr: gradebookParams,
-        },
-        (xml) =>
-          new XMLFactory(xml)
-            .encodeAttribute('MeasureDescription', 'HasDropBox')
-            .encodeAttribute('Measure', 'Type')
-            .toString()
-      );
-    });
+  return super.processRequest<GradebookXMLObject & { extraData?: any }>({
+    methodName: 'Gradebook',
+    paramStr: gradebookParams,
+  });
 };
 
 
@@ -760,56 +914,17 @@ export default class Client extends rest.Client {
   //altnerate method for studentInfo when studentInfo fails:
   //those things commented out are not applicable here
   public ChildList():Promise<[StudentInfo,any]>{
-    console.log("sanity check")
     return new Promise<[StudentInfo,any]>((res,rej)=>{
-      this.soapClient
-        .request({methodName:"ChildList"})
-          .then((xmlObject:any)=>{
-            const raw=xmlObject;
-            xmlObject=xmlObject.ChildList[0];
-
-            const m = {
-            student:{
-              name:xmlObject.Child[0].ChildName, //full Name on this fallback method
-              lastName:"not available",
-              nickname:"not available"},
-          //  birthDate:new Date(),
-           // track:"not available",
-           // address:"not available",
-            photo:optional(xmlObject.Child[0].photo),
-            counselor:undefined,
-            currentSchool:xmlObject.Child[0].OrganizationName[0],
-           // dentist:undefined,
-            // physician:undefined,
-              id:optional(xmlObject.Child[0]['@_ChildPermID']),
-              orgYearGu:optional(xmlObject.Child[0]['@_OrgYearGU']),
-              //phone:"not available",
-              //email:"not available",
-              //emergencyContacts:undefined,
-              gender:"null",
-              grade:optional(xmlObject.Child[0].Grade),
-
-
-
-
+      super
+        .processRequest<any>({ methodName: 'GetChildListData' })
+        .then((result: any) => {
+          if (isChildListJSON(result)) {
+            return res([parseChildListJSON(result), result.extraData]);
           }
-          console.log(xmlObject,"right above concurrent")
-          
-          if(xmlObject.Child[0]["ConcurrentSchools"]?.[0]){
-            console.log("begin concurrent branch")
-    
-            var l=xmlObject.Child[0]["ConcurrentSchools"].map((school:any)=>({name:school["ConcurrentSchool"][0]["@_ConSchoolName"][0],GU:school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0]}))
-          
-           
-            
-            //@ts-ignore
-            m.schools=l
-          }
-          console.log("Concurrent Schools: ",m)
-
-            res([m as StudentInfo,raw.extraData])})
-          .catch(rej)
-    })
+          rej(new Error('Unexpected ChildList REST response shape'));
+        })
+        .catch(rej);
+    });
   }
 
 
@@ -823,93 +938,13 @@ export default class Client extends rest.Client {
    */
   public studentInfo(): Promise<[StudentInfo,any]> {
     return new Promise<[StudentInfo,any]>((res, rej) => {
-      this.soapClient
-        .request<StudentInfoXMLObject>({
-          methodName: 'StudentInfo',
-          paramStr: { childIntId: 0 },
-        })
-        .then((xmlObjectData) => {
-          res([{
-            student: {
-              name: xmlObjectData.StudentInfo[0].FormattedName[0],
-              lastName: xmlObjectData.StudentInfo[0].LastNameGoesBy[0],
-              nickname: xmlObjectData.StudentInfo[0].NickName[0],
-            },
-            birthDate: dateParse(xmlObjectData.StudentInfo[0].BirthDate[0],"M/dd/yyyy",new Date()),
-            track: optional(xmlObjectData.StudentInfo[0].Track),
-            address: optional(xmlObjectData.StudentInfo[0].Address),
-            photo: optional(xmlObjectData.StudentInfo[0].Photo),
-            counselor:
-              xmlObjectData.StudentInfo[0].CounselorName &&
-              xmlObjectData.StudentInfo[0].CounselorEmail &&
-              xmlObjectData.StudentInfo[0].CounselorStaffGU
-                ? {
-                    name: xmlObjectData.StudentInfo[0].CounselorName[0],
-                    email: xmlObjectData.StudentInfo[0].CounselorEmail[0],
-                    staffGu: xmlObjectData.StudentInfo[0].CounselorStaffGU[0],
-                  }
-                : undefined,
-            currentSchool: xmlObjectData.StudentInfo[0].CurrentSchool[0],
-            dentist: xmlObjectData.StudentInfo[0].Dentist
-              ? {
-                  name: xmlObjectData.StudentInfo[0].Dentist[0]['@_Name'][0],
-                  phone: xmlObjectData.StudentInfo[0].Dentist[0]['@_Phone'][0],
-                  extn: xmlObjectData.StudentInfo[0].Dentist[0]['@_Extn'][0],
-                  office: xmlObjectData.StudentInfo[0].Dentist[0]['@_Office'][0],
-                }
-              : undefined,
-            physician: xmlObjectData.StudentInfo[0].Physician
-              ? {
-                  name: xmlObjectData.StudentInfo[0].Physician[0]['@_Name'][0],
-                  phone: xmlObjectData.StudentInfo[0].Physician[0]['@_Phone'][0],
-                  extn: xmlObjectData.StudentInfo[0].Physician[0]['@_Extn'][0],
-                  hospital: xmlObjectData.StudentInfo[0].Physician[0]['@_Hospital'][0],
-                }
-              : undefined,
-            id: optional(xmlObjectData.StudentInfo[0].PermID),
-            orgYearGu: optional(xmlObjectData.StudentInfo[0].OrgYearGU),
-            phone: optional(xmlObjectData.StudentInfo[0].Phone),
-            email: optional(xmlObjectData.StudentInfo[0].EMail),
-            emergencyContacts: xmlObjectData.StudentInfo[0].EmergencyContacts
-              ? xmlObjectData.StudentInfo[0].EmergencyContacts[0].EmergencyContact?.map((contact) => ({
-                  name: optional(contact['@_Name']),
-                  phone: {
-                    home: optional(contact['@_HomePhone']),
-                    mobile: optional(contact['@_MobilePhone']),
-                    other: optional(contact['@_OtherPhone']),
-                    work: optional(contact['@_WorkPhone']),
-                  },
-                  relationship: optional(contact['@_Relationship']),
-                }))
-              : [],
-            gender: optional(xmlObjectData.StudentInfo[0].Gender),
-            grade: optional(xmlObjectData.StudentInfo[0].Grade),
-            lockerInfoRecords: optional(xmlObjectData.StudentInfo[0].LockerInfoRecords),
-            homeLanguage: optional(xmlObjectData.StudentInfo[0].HomeLanguage),
-            homeRoom: optional(xmlObjectData.StudentInfo[0].HomeRoom),
-            homeRoomTeacher: {
-              email: optional(xmlObjectData.StudentInfo[0].HomeRoomTchEMail),
-              name: optional(xmlObjectData.StudentInfo[0].HomeRoomTch),
-              staffGu: optional(xmlObjectData.StudentInfo[0].HomeRoomTchStaffGU),
-            },
-            additionalInfo: xmlObjectData.StudentInfo[0].UserDefinedGroupBoxes[0].UserDefinedGroupBox
-              ? (xmlObjectData.StudentInfo[0].UserDefinedGroupBoxes[0].UserDefinedGroupBox.map((definedBox) => ({
-                  id: optional(definedBox['@_GroupBoxID']), // string | undefined
-                  type: definedBox['@_GroupBoxLabel'][0], // string
-                  vcId: optional(definedBox['@_VCID']), // string | undefined
-                  items: definedBox.UserDefinedItems[0].UserDefinedItem.map((item) => ({
-                    source: {
-                      element: item['@_SourceElement'][0],
-                      object: item['@_SourceObject'][0],
-                    },
-                    vcId: item['@_VCID'][0],
-                    value: item['@_Value'][0],
-                    type: item['@_ItemType'][0],
-                  })) as AdditionalInfoItem[],
-                })) as AdditionalInfo[])
-              : [],
-              //@ts-ignore You will never make me use typeScript.
-          } as StudentInfo,xmlObjectData.extraData]);
+      super
+        .processRequest<any>({ methodName: 'GetStudentInfoData' })
+        .then((xmlObjectData: any) => {
+          if (isStudentInfoJSON(xmlObjectData)) {
+            return res([parseStudentInfoJSON(xmlObjectData), xmlObjectData.extraData]);
+          }
+          rej(new Error('Unexpected StudentInfo REST response shape'));
         })
         .catch(rej);
     });

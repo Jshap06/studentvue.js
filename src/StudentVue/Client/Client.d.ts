@@ -1,3 +1,20 @@
+/**
+ * REST migration TODO - what's unconfirmed or unmigrated, and why (see each method's own
+ * comments for detail):
+ * - ChildList (GetChildListData): concurrent-school mapping unconfirmed - no sample from a
+ *   concurrently-enrolled student.
+ * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
+ *   additionalInfo unconfirmed - sample was truncated before reaching them.
+ * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
+ *   unconfirmed - no concurrent-enrollment or weekday sample yet.
+ * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was
+ *   truncated. dailyAttendance (twice-daily schools) unsupported entirely - different shape,
+ *   needs its own type, rejects with an explicit error for now.
+ * - reportCards, messages, schoolInfo, calendar: not migrated yet - no REST method name/shape
+ *   confirmed, still SOAP-only via `this.soapClient`.
+ * - validateCredentials: intentionally left on SOAP - relies on a SOAP-specific bogus-method
+ *   error-message trick, no REST equivalent attempted.
+ */
 import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import rest from '../../utils/rest/rest';
 import { SchoolInfo, StudentInfo } from './Client.interfaces';
@@ -54,15 +71,19 @@ export default class Client extends rest.Client {
     /**
      * Gets the schedule of the student
      * @param {number} termIndex The index of the term.
-     * @returns {Promise<Schedule>} Returns the schedule of the student
+     * @returns {Promise<[any, any]>} Returns the schedule of the student
      * @description
      * ```js
-     * await schedule(0) // -> { term: { index: 0, name: '1st Qtr Progress' }, ... }
+     * await schedule(0) // -> { termName: 'Semester 1', termIndex: '0', terms: [...], mainClasses: [...], today: false }
      * ```
      */
     schedule(termIndex?: number): Promise<[any, any]>;
     /**
      * Returns the attendance of the student
+     * @param {string} orgYearGu The concurrent school's orgYearGU to fetch attendance for, if any
+     *   (same pattern as `gradebook()`'s own `orgYearGu` param). REST requires `orgYearGU` on every
+     *   call, unlike the old SOAP method - pass the student's own `orgYearGu` (from `ChildList`/
+     *   `studentInfo()`) if you don't have a concurrent school to target.
      * @returns {Promise<Attendance>} Returns an Attendance object
      * @description
      * ```js
@@ -70,7 +91,7 @@ export default class Client extends rest.Client {
      *  .then(console.log); // -> { type: 'Period', period: {...}, schoolName: 'University High School', absences: [...], periodInfos: [...] }
      * ```
      */
-    attendance(): Promise<[Attendance, any]>;
+    attendance(orgYearGu?: string | null): Promise<[Attendance, any]>;
     /**
      * Returns the gradebook of the student
      * @param {number} reportingPeriodIndex The timeframe that the gradebook should return

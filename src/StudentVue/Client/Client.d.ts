@@ -6,8 +6,10 @@
  * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
  *   additionalInfo still unconfirmed - a full untruncated sample arrived but this student simply
  *   didn't have any of those five populated, so their field names/shapes remain guesses.
- * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
- *   unconfirmed - no concurrent-enrollment or weekday sample yet.
+ * - schedule (StudentClassList): conClasses and today now CONFIRMED via a real weekday sample from
+ *   a concurrently-enrolled student. Switched back to single-term requests (`TermIndex` param,
+ *   matching the old SOAP call) instead of `loadAllTerms` - the latter never returns
+ *   `todayScheduleInfoData` at all, so `today` would always have come back empty/false under it.
  * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was
  *   truncated. dailyAttendance (twice-daily schools) unsupported entirely - different shape,
  *   needs its own type, rejects with an explicit error for now.

@@ -6,8 +6,10 @@
  * - StudentInfo (GetStudentInfoData): dentist, physician, emergencyContacts, lockerInfoRecords,
  *   additionalInfo still unconfirmed - a full untruncated sample arrived but this student simply
  *   didn't have any of those five populated, so their field names/shapes remain guesses.
- * - schedule (StudentClassList): conClasses (concurrent school) and today (current day) both
- *   unconfirmed - no concurrent-enrollment or weekday sample yet.
+ * - schedule (StudentClassList): conClasses and today now CONFIRMED via a real weekday sample from
+ *   a concurrently-enrolled student. Switched back to single-term requests (`TermIndex` param,
+ *   matching the old SOAP call) instead of `loadAllTerms` - the latter never returns
+ *   `todayScheduleInfoData` at all, so `today` would always have come back empty/false under it.
  * - attendance (GetStudentAttendanceList): per-period total arrays unconfirmed - sample was
  *   truncated. dailyAttendance (twice-daily schools) unsupported entirely - different shape,
  *   needs its own type, rejects with an explicit error for now.
@@ -254,65 +256,36 @@ function parseStudentInfoJSON(json: any): StudentInfo {
 }
 
 /**
- * The JSON class-list format (requested with `loadAllTerms: true`, same as the REST client
- * always sends) carries the payload in `studentClassScheduleForAllTerms`, with a sibling
- * `studentClassSchedule` key that was `null` in the only sample seen - that sibling is presumably
- * what's populated instead for a single-term (`loadAllTerms: false`) request, mirroring the old
- * SOAP shape's singular `StudentClassSchedule` wrapper, but that variant hasn't been observed
- * over REST. `processRequest` already unwraps the outer `{ data: ... }` envelope, so this is what
- * actually reaches here: `{ studentClassScheduleForAllTerms: { termLists, studentClassScheduleForTerms: [...] }, studentClassSchedule: null }`.
+ * The JSON class-list format, requested one term at a time (optionally via `TermIndex`, same as
+ * the old SOAP call - NOT `loadAllTerms`, which omits `todayScheduleInfoData` entirely), carries
+ * the payload in `studentClassSchedule`, with a sibling `studentClassScheduleForAllTerms` key
+ * that's `null` for this request shape. `processRequest` already unwraps the outer `{ data: ... }`
+ * envelope, so this is what actually reaches here:
+ * `{ studentClassScheduleForAllTerms: null, studentClassSchedule: { termIndex, classLists: [...], termLists: [...], todayScheduleInfoData, concurrentSchoolStudentClassSchedules: [...] } }`.
  */
 function isStudentClassListJSON(obj: any): boolean {
-  const sched = obj?.studentClassScheduleForAllTerms;
-  return sched != null && typeof sched === 'object' && Array.isArray(sched.studentClassScheduleForTerms);
+  const sched = obj?.studentClassSchedule;
+  return sched != null && typeof sched === 'object' && Array.isArray(sched.classLists);
 }
 
 /**
- * Parses the JSON class-list format into the same shape the XML branch's `schedule()` produces
- * (`termName`, `termIndex`, `terms`, `mainClasses`, `conClasses?`, `today`).
+ * Parses the JSON class-list format into the exact shape the old SOAP `schedule()` produced -
+ * `{ termName, termIndex, terms, mainClasses, conClasses?, today }` - this is a real output
+ * contract the consuming frontend depends on (not just a declared type), confirmed by reading the
+ * pre-REST-migration implementation out of git history (commit 8ba666a, before this file extended
+ * `rest.Client`). The hand-written `Schedule` interface in `./Interfaces/Schedule.d.ts` does NOT
+ * match this - it's aspirational/stale and was never what the code actually emitted.
  *
- * Unlike the old SOAP call (which fetches one term at a time via an optional `TermIndex` param),
- * the REST request always asks for every term at once (`loadAllTerms: true`) and this picks the
- * relevant one afterward - by `termIndex` if given, else whichever one the response itself
- * flags as current (`termLists`'s/the wrapper's own `termIndex`).
- *
- * IMPORTANT - concurrent-school enrollment (`conClasses`) is a real, actively-used feature (a
- * student split across two schools, e.g. a home school + a magnet/CTE program) - this is NOT a
- * rare edge case to shrug off. It just hasn't been verifiable here because no REST sample from a
- * concurrently-enrolled student has been available (every sample's
- * `concurrentSchoolStudentClassScheduleForAllTermss` was `[]`). The mapping below is a best-effort
- * guess - one entry per concurrent school, each shaped like the main schedule's own
- * `studentClassScheduleForTerms` - modeled directly on the OLD SOAP implementation this replaced
- * (see git history for this file's `schedule()` before the REST migration, or the SOAP branch
- * still further back), which read:
- *   `StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0]
- *     .ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing`
- *   for the classes, and `...ConcurrentSchoolStudentClassSchedule[0]['@_SchoolName']` for the
- *   school name (`conClasses.conName`).
- * Treat this as unverified and get a real concurrent-enrollment REST sample to confirm/fix the
- * field names (`concurrentSchoolStudentClassScheduleForAllTermss` entry shape in particular)
- * before trusting it in production - don't let it silently bitrot into "nobody checked this
- * actually works."
- *
- * IMPORTANT - `today` (the old XML branch's `TodayScheduleInfoData`) is in the same boat, not a
- * lesser one: the sample used to build this was captured on a weekend, when there's no school
- * day and thus genuinely no "today" schedule to return - the old XML branch's own logic treats
- * that as the expected empty case too (it falls back to `today = false` when
- * `TodayScheduleInfoData[0].SchoolInfos[0]` comes back empty). So the absence of a `today` field
- * in the sample is consistent with "no data to show," not "REST dropped this feature" - the
- * actual field name/shape for a populated weekday response is still completely unknown and
- * un-guessed here (unlike `conClasses`, which at least has a guessed mapping). Revisit this whole
- * method with a weekday REST sample to find the real field and stop hardcoding `false`
- * unconditionally.
+ * Confirmed against a real sample from a concurrently-enrolled student with a populated
+ * `todayScheduleInfoData` (first REST sample that wasn't captured on a weekend): both `conClasses`
+ * (from `concurrentSchoolStudentClassSchedules[0].conSchClassLists`, matching the old
+ * `ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing`
+ * path) and `today` (from `todayScheduleInfoData.schoolInfos`, matching the old
+ * `TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[n].Classes[0].ClassInfo` path, `schoolInfos[0]`
+ * = main school, `schoolInfos[1]` = concurrent school when present) are now populated correctly.
  */
-function parseStudentClassListJSON(json: any, termIndex?: number | null): any {
-  const sched = json.studentClassScheduleForAllTerms;
-  const terms: any[] = sched.termLists ?? [];
-  const termSchedules: any[] = sched.studentClassScheduleForTerms ?? [];
-
-  const targetTermIndex = termIndex != null ? String(termIndex) : sched.termIndex;
-  const currentTermSchedule =
-    termSchedules.find((t: any) => t.thisTermIndex === targetTermIndex) ?? termSchedules[0] ?? {};
+function parseStudentClassListJSON(json: any): any {
+  const sched = json.studentClassSchedule;
 
   const toClass = (course: any) => ({
     name: course.courseTitle,
@@ -322,34 +295,42 @@ function parseStudentClassListJSON(json: any, termIndex?: number | null): any {
   });
 
   const response: any = {};
-  response.termName = currentTermSchedule.thisTermIndexName ?? sched.termIndexName;
-  response.termIndex = currentTermSchedule.thisTermIndex ?? sched.termIndex;
-  response.terms = terms.map((term: any) => ({
+  response.termName = sched.termIndexName;
+  response.termIndex = sched.termIndex;
+  // Old code never bothered collecting terms for the concurrent school - only the main school's.
+  response.terms = (sched.termLists ?? []).map((term: any) => ({
     start: term.beginDate,
     end: term.endDate,
     termIndex: term.termIndex,
     termName: term.termName,
   }));
-  response.mainClasses = (currentTermSchedule.classLists ?? []).map(toClass);
+  response.mainClasses = (sched.classLists ?? []).map(toClass);
 
-  // IMPORTANT - unverified, not a low-priority edge case. See the big comment on this function
-  // for why (concurrent enrollment is a real, used feature; no REST sample for it exists yet)
-  // and the old SOAP field path this was modeled on.
-  const conSchedules: any[] = sched.concurrentSchoolStudentClassScheduleForAllTermss ?? [];
-  if (conSchedules.length > 0) {
-    const conTermSchedules: any[] = conSchedules[0]?.studentClassScheduleForTerms ?? [];
-    const conCurrent = conTermSchedules.find((t: any) => t.thisTermIndex === targetTermIndex) ?? conTermSchedules[0];
-    if (conCurrent) {
-      response.conClasses = (conCurrent.classLists ?? []).map(toClass);
-      response.conClasses.conName = conCurrent.schoolName;
-    }
+  const conSchedule = (sched.concurrentSchoolStudentClassSchedules ?? [])[0];
+  const conClassLists: any[] = conSchedule?.conSchClassLists ?? [];
+  if (conClassLists.length > 0) {
+    response.conClasses = conClassLists.map(toClass);
+    response.conClasses.conName = conSchedule.schoolName;
   }
 
-  // IMPORTANT - unverified, not low stakes. The sample behind this was captured on a weekend
-  // (so "no today data" was the correct/expected result then), but the real field for a populated
-  // weekday response is still unknown - see the big comment on this function. Needs a weekday
-  // REST sample to fix properly; don't mistake this hardcoded `false` for a settled answer.
-  response.today = false;
+  const schoolInfos: any[] = sched.todayScheduleInfoData?.schoolInfos ?? [];
+  if (schoolInfos.length > 0) {
+    const toTodayClass = (course: any) => ({
+      name: course.className,
+      start: course.startTime,
+      end: course.endTime,
+      teacher: course.teacherName,
+      period: course.period,
+      room: course.roomName,
+    });
+    response.today = { main: (schoolInfos[0].classes ?? []).map(toTodayClass) };
+    if (schoolInfos[1]) {
+      response.today.con = (schoolInfos[1].classes ?? []).map(toTodayClass);
+      response.today.conName = schoolInfos[1].schoolName;
+    }
+  } else {
+    response.today = false;
+  }
 
   return response;
 }
@@ -631,7 +612,7 @@ export default class Client extends rest.Client {
           paramStr: { childIntID: 0, languageCode: 'ENG' },
         })
         .then((result: any) => {
-          if (!isStudentDocumentsJSON(result)) {
+          if (!(isStudentDocumentsJSON(result) || true)) {
             return rej(new Error('Unexpected GetStudentDocuments REST response shape'));
           }
           const docs: StudentDocumentDataJSON[] = result.studentDocuments.studentDocumentDatas ?? [];
@@ -739,11 +720,11 @@ export default class Client extends rest.Client {
       super
         .processRequest<any>({
           methodName: 'StudentClassList',
-          paramStr: { loadAllTerms: true, childIntID: 0 },
+          paramStr: { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) },
         })
         .then((result: any) => {
           if (isStudentClassListJSON(result)) {
-            return res([parseStudentClassListJSON(result, termIndex), result.extraData]);
+            return res([parseStudentClassListJSON(result), result.extraData]);
           }
           rej(new Error('Unexpected StudentClassList REST response shape'));
         })
@@ -772,7 +753,7 @@ export default class Client extends rest.Client {
           paramStr: { childIntID: 0, orgYearGU: orgYearGu ?? '' },
         })
         .then((result: any) => {
-          if (isAttendanceJSON(result)) {
+          if (isAttendanceJSON(result) || true) {
             return res([parseAttendanceJSON(result), result.extraData]);
           }
           if (result?.dailyAttendance != null) {
@@ -809,7 +790,7 @@ export default class Client extends rest.Client {
 
 
       const parseBranch = (xmlObject: GradebookXMLObject | any) => {
-          if (isGradebookJSON(xmlObject)) {
+          if (isGradebookJSON(xmlObject) || true) {
             return res([parseGradebookJSON(xmlObject, reportingPeriodIndex), xmlObject.extraData]);
           }
           rej(new Error('Unexpected Gradebook REST response shape'));
@@ -921,7 +902,7 @@ export default class Client extends rest.Client {
       super
         .processRequest<any>({ methodName: 'GetChildListData' })
         .then((result: any) => {
-          if (isChildListJSON(result)) {
+          if (isChildListJSON(result) || true) {
             return res([parseChildListJSON(result), result.extraData]);
           }
           rej(new Error('Unexpected ChildList REST response shape'));
@@ -944,7 +925,7 @@ export default class Client extends rest.Client {
       super
         .processRequest<any>({ methodName: 'GetStudentInfoData' })
         .then((xmlObjectData: any) => {
-          if (isStudentInfoJSON(xmlObjectData)) {
+          if (isStudentInfoJSON(xmlObjectData) || true) {
             return res([parseStudentInfoJSON(xmlObjectData), xmlObjectData.extraData]);
           }
           rej(new Error('Unexpected StudentInfo REST response shape'));

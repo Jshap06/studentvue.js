@@ -17,11 +17,18 @@
  *   confirmed, still SOAP-only via `this.soapClient`.
  * - validateCredentials: intentionally left on SOAP - relies on a SOAP-specific bogus-method
  *   error-message trick, no REST equivalent attempted.
+ * - Every REST-migrated method above also has its old SOAP implementation restored. The `api`
+ *   constructor param picks which one goes first; REST falls back to SOAP on a 404, SOAP falls back
+ *   to REST on an error mentioning "deprecated" (see utils/fallback).
  */
 import { LoginCredentials, ParsedRequestError } from '../../utils/soap/Client/Client.interfaces';
 import soap from '../../utils/soap/soap';
 import rest from '../../utils/rest/rest';
-import { SchoolInfo, StudentInfo } from './Client.interfaces';
+import { AdditionalInfo, AdditionalInfoItem, SchoolInfo, StudentInfo } from './Client.interfaces';
+import { StudentInfoXMLObject } from './Interfaces/xml/StudentInfo';
+import { AttendanceXMLObject } from './Interfaces/xml/Attendance';
+import { DocumentXMLObject } from '../Document/Document.xml';
+import { ApiType, withFallback } from '../../utils/fallback/fallback';
 import Message from '../Message/Message';
 import { MessageXMLObject } from '../Message/Message.xml';
 import { AssignmentEventXMLObject, CalendarXMLObject, RegularEventXMLObject } from './Interfaces/xml/Calendar';
@@ -39,7 +46,7 @@ import Document, { StudentDocumentDataJSON } from '../Document/Document';
 import RequestException from '../RequestException/RequestException';
 import XMLFactory from '../../utils/XMLFactory/XMLFactory';
 import cache from '../../utils/cache/cache';
-import { asyncPoolAll } from './Client.helpers';
+import { asyncPoolAll, optional } from './Client.helpers';
 import he from "he";
 import { el, id } from 'date-fns/locale';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -566,16 +573,340 @@ function parseGradebookJSON(json: any, reportingPeriodIndex?: number | null): Gr
   } as Gradebook;
 }
 
+/*
+ * SOAP (XML) parsers - restored from the pre-REST-migration implementation (commit 8ba666a) so
+ * every REST-migrated method can still fall back to, or be configured to start with, the legacy
+ * SOAP API. See `utils/fallback` and the `api` constructor param.
+ */
+
+/**
+ * Maps a SOAP `GetStudentDocumentInitialData` entry onto the REST JSON shape `Document` takes.
+ */
+function documentXMLToJSON(xml: any): StudentDocumentDataJSON {
+  return {
+    documentGU: xml['@_DocumentGU'][0],
+    documentFileName: xml['@_DocumentFileName'][0],
+    documentDate: xml['@_DocumentDate'][0],
+    documentType: xml['@_DocumentType'][0],
+    studentGU: optional(xml['@_StudentGU']) ?? '',
+    documentComment: xml['@_DocumentComment'][0],
+  };
+}
+
+function parseDocumentsXML(xmlObject: DocumentXMLObject): StudentDocumentDataJSON[] {
+  const datas = xmlObject.StudentDocuments[0].StudentDocumentDatas[0];
+  if (typeof datas == 'string') return [];
+  return datas.StudentDocumentData.map(documentXMLToJSON);
+}
+
+function parseStudentClassListXML(xmlObject: any): any {
+  const response: any = {};
+  response.termName = xmlObject.StudentClassSchedule[0]['@_TermIndexName'][0]; //could sometimes be strings but fuck that
+  response.termIndex = xmlObject.StudentClassSchedule[0]['@_TermIndex'][0];
+  //for now we're not grabbing the terms for the conccurent school, they lowk don't matter
+  response.terms = xmlObject.StudentClassSchedule[0].TermLists[0].TermListing.map((term: any) => ({ start: term['@_BeginDate'][0], end: term['@_EndDate'][0], termIndex: term['@_TermIndex'][0], termName: term['@_TermName'][0] }));
+
+  response.mainClasses = xmlObject.StudentClassSchedule[0].ClassLists[0].ClassListing.map((course: any) => ({ name: course['@_CourseTitle'][0], period: course['@_Period'][0], teacher: course['@_Teacher'][0], room: course['@_RoomName'][0] }));
+  let checker = false;
+  try {
+    checker = xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].
+      ConSchClassLists[0].ClassListing[0] != '';
+  } catch {}
+
+  if (checker) {
+    response.conClasses = xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0].ConSchClassLists[0].ClassListing.map((course: any) => ({ name: course['@_CourseTitle'][0], period: course['@_Period'][0], teacher: course['@_Teacher'][0], room: course['@_RoomName'][0] }));
+    response.conClasses.conName = xmlObject.StudentClassSchedule[0].ConcurrentSchoolStudentClassSchedules[0].ConcurrentSchoolStudentClassSchedule[0]['@_SchoolName'];
+  }
+  try {
+    if (xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0] != '') {
+      response.today = {};
+      response.today.main = xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[0].Classes[0].ClassInfo.map((course: any) => ({ name: course['@_ClassName'], start: course['@_StartTime'], end: course['@_EndTime'], teacher: course['@_TeacherName'], period: course['@_Period'], room: course['@_RoomName'] }));
+      try {
+        response.today.con = xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1].Classes[0].ClassInfo.map((course: any) => ({ name: course['@_ClassName'], start: course['@_StartTime'], end: course['@_EndTime'], teacher: course['@_TeacherName'], period: course['@_Period'], room: course['@_RoomName'] }));
+        response.today.conName = xmlObject.StudentClassSchedule[0].TodayScheduleInfoData[0].SchoolInfos[0].SchoolInfo[1]['@_SchoolName'];
+      } catch { console.log("no concurrent"); }
+    } else {
+      response.today = false;
+    }
+  } catch (error) { console.log(error); response.today = false; }
+  return response;
+}
+
+function parseAttendanceXML(attendanceXMLObject: AttendanceXMLObject): Attendance {
+  const xmlObject = attendanceXMLObject.Attendance[0];
+  return {
+    type: xmlObject['@_Type'][0],
+    period: {
+      total: Number(xmlObject['@_PeriodCount'][0]),
+      start: Number(xmlObject['@_StartPeriod'][0]),
+      end: Number(xmlObject['@_EndPeriod'][0]),
+    },
+    schoolName: xmlObject['@_SchoolName'][0],
+    absences: xmlObject.Absences[0].Absence
+      ? xmlObject.Absences[0].Absence.map((absence) => ({
+          date: dateParse(absence['@_AbsenceDate'][0], "M/dd/yyyy", new Date()),
+          reason: absence['@_Reason'][0],
+          note: absence['@_Note'][0],
+          description: absence['@_CodeAllDayDescription'][0],
+          periods: absence.Periods[0].Period.map(
+            (period) =>
+              ({
+                period: Number(period['@_Number'][0]),
+                name: period['@_Name'][0],
+                reason: period['@_Reason'][0],
+                course: period['@_Course'][0],
+                staff: {
+                  name: period['@_Staff'][0],
+                  staffGu: period['@_StaffGU'][0],
+                  email: period['@_StaffEMail'][0],
+                },
+                orgYearGu: period['@_OrgYearGU'][0],
+              } as AbsentPeriod)
+          ),
+        }))
+      : [],
+    periodInfos: xmlObject.TotalActivities[0].PeriodTotal.map((pd, i) => ({
+      period: Number(pd['@_Number'][0]),
+      total: {
+        excused: Number(xmlObject.TotalExcused[0].PeriodTotal[i]['@_Total'][0]),
+        tardies: Number(xmlObject.TotalTardies[0].PeriodTotal[i]['@_Total'][0]),
+        unexcused: Number(xmlObject.TotalUnexcused[0].PeriodTotal[i]['@_Total'][0]),
+        activities: Number(xmlObject.TotalActivities[0].PeriodTotal[i]['@_Total'][0]),
+        unexcusedTardies: Number(xmlObject.TotalUnexcusedTardies[0].PeriodTotal[i]['@_Total'][0]),
+      },
+    })) as PeriodInfo[],
+  } as Attendance;
+}
+
+/**
+ * Throws (a `RequestException`, or a friendlier `Error` for bad credentials) if the XML is an
+ * `RT_ERROR` - cached gradebooks can be one, since they're stored raw before being parsed.
+ */
+function parseGradebookXML(xmlObject: GradebookXMLObject | any, reportingPeriodIndex?: number | null): Gradebook {
+  const rtError = xmlObject.RT_ERROR?.[0]?.['@_ERROR_MESSAGE']?.[0];
+  if (rtError != null) {
+    if (rtError.includes("The user name or password is incorrect") || rtError.includes("Invalid user id or password")) {
+      throw new Error("Invalid/Incorrect Username or Password");
+    }
+    throw new RequestException(xmlObject);
+  }
+
+  return {
+    error: xmlObject.Gradebook[0]['@_ErrorMessage'][0],
+    type: xmlObject.Gradebook[0]['@_Type'][0],
+    reportingPeriod: {
+      current: {
+        index:
+          reportingPeriodIndex ??
+          Number(
+            xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.find(
+              (x: any) => x['@_GradePeriod'][0] === xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0]
+            )?.['@_Index'][0]
+          ),
+        date: {
+          start: dateParse(xmlObject.Gradebook[0].ReportingPeriod[0]['@_StartDate'][0], "M/dd/yyyy", new Date()),
+          end: dateParse(xmlObject.Gradebook[0].ReportingPeriod[0]['@_EndDate'][0], "M/dd/yyyy", new Date()),
+        },
+        name: xmlObject.Gradebook[0].ReportingPeriod[0]['@_GradePeriod'][0],
+      },
+      available: xmlObject.Gradebook[0].ReportingPeriods[0].ReportPeriod.map((period: any) => ({
+        date: { start: dateParse(period['@_StartDate'][0], "M/dd/yyyy", new Date()), end: dateParse(period['@_EndDate'][0], "M/dd/yyyy", new Date()) },
+        name: period['@_GradePeriod'][0],
+        index: Number(period['@_Index'][0]),
+      })),
+    },
+    courses: typeof xmlObject.Gradebook[0].Courses[0] != 'string' ? xmlObject.Gradebook[0].Courses[0].Course.map((course: any) => ({
+      courseID: course['@_CourseID']?.[0] ?? "",
+      period: Number(course['@_Period'][0]),
+      title: he.decode(course['@_Title'][0]),
+      room: course['@_Room'][0],
+      staff: {
+        name: course['@_Staff'][0],
+        email: course['@_StaffEMail'][0],
+        staffGu: course['@_StaffGU'][0],
+      },
+      marks: typeof (course.Marks[0]) !== 'string' ? (course.Marks[0].Mark.map((mark: any) => ({
+        name: mark['@_MarkName'][0],
+        calculatedScore: {
+          string: mark['@_CalculatedScoreString'][0],
+          raw: Number(mark['@_CalculatedScoreRaw'][0]),
+        },
+        weightedCategories:
+          typeof mark['GradeCalculationSummary'][0] !== 'string'
+            ? mark['GradeCalculationSummary'][0].AssignmentGradeCalc.map(
+                (weighted: { [x: string]: any[]; }) =>
+                  ({
+                    type: he.decode(weighted['@_Type'][0]),
+                    calculatedMark: weighted['@_CalculatedMark'][0],
+                    weight: {
+                      evaluated: weighted['@_WeightedPct'][0],
+                      standard: weighted['@_Weight'][0],
+                    },
+                    points: {
+                      current: Number(weighted['@_Points'][0]),
+                      possible: Number(weighted['@_PointsPossible'][0]),
+                    },
+                  } as WeightedCategory)
+              )
+            : [],
+        assignments:
+          typeof mark.Assignments[0] !== 'string'
+            ? (mark.Assignments[0].Assignment.map((assignment: any) => ({
+                gradebookId: assignment['@_GradebookID'][0],
+                name: decodeURI(assignment['@_Measure'][0]),
+                type: he.decode(assignment['@_Type'][0]),
+                date: {
+                  start: dateParse(assignment['@_Date'][0], "M/dd/yyyy", new Date()),
+                  due: dateParse(assignment['@_DueDate'][0], "M/dd/yyyy", new Date()),
+                },
+                score: {
+                  type: he.decode(assignment['@_ScoreType'][0]),
+                  value: assignment['@_Score'] !== undefined ? assignment['@_Score'] : "Not Graded",
+                },
+                points: assignment['@_Points'][0],
+                notes: he.decode(assignment['@_Notes'][0]),
+                teacherId: assignment['@_TeacherID'][0],
+                description: decodeURI(assignment['@_MeasureDescription'][0]),
+                hasDropbox: JSON.parse(assignment['@_HasDropBox'][0]),
+                studentId: assignment['@_StudentID'][0],
+                dropboxDate: {
+                  start: dateParse(assignment['@_DropStartDate'][0], "M/dd/yyyy", new Date()),
+                  end: dateParse(assignment['@_DropEndDate'][0], "M/dd/yyyy", new Date()),
+                },
+                // Resources are dropped on purpose, same as the JSON branch - grade melon doesn't use them.
+                resources: [],
+              })) as Assignment[])
+            : [],
+      }))) as Mark[] : [{ name: "none", calculatedScore: { string: "none", raw: NaN }, weightedCategories: [], assignments: [] }] as Mark[],
+    })) : [],
+  } as Gradebook;
+}
+
+function parseChildListXML(raw: any): StudentInfo {
+  const xmlObject = raw.ChildList[0];
+
+  const m: any = {
+    student: {
+      name: xmlObject.Child[0].ChildName, //full Name on this fallback method
+      lastName: "not available",
+      nickname: "not available",
+    },
+    photo: optional(xmlObject.Child[0].photo),
+    counselor: undefined,
+    currentSchool: xmlObject.Child[0].OrganizationName[0],
+    id: optional(xmlObject.Child[0]['@_ChildPermID']),
+    orgYearGu: optional(xmlObject.Child[0]['@_OrgYearGU']),
+    gender: "null",
+    grade: optional(xmlObject.Child[0].Grade),
+  };
+
+  if (xmlObject.Child[0]["ConcurrentSchools"]?.[0]) {
+    m.schools = xmlObject.Child[0]["ConcurrentSchools"].map((school: any) => ({ name: school["ConcurrentSchool"][0]["@_ConSchoolName"][0], GU: school["ConcurrentSchool"][0]["@_ConOrgYearGU"][0] }));
+  }
+
+  return m as StudentInfo;
+}
+
+function parseStudentInfoXML(xmlObjectData: StudentInfoXMLObject): StudentInfo {
+  return {
+    student: {
+      name: xmlObjectData.StudentInfo[0].FormattedName[0],
+      lastName: xmlObjectData.StudentInfo[0].LastNameGoesBy[0],
+      nickname: xmlObjectData.StudentInfo[0].NickName[0],
+    },
+    birthDate: dateParse(xmlObjectData.StudentInfo[0].BirthDate[0], "M/dd/yyyy", new Date()),
+    track: optional(xmlObjectData.StudentInfo[0].Track),
+    address: optional(xmlObjectData.StudentInfo[0].Address),
+    photo: optional(xmlObjectData.StudentInfo[0].Photo),
+    counselor:
+      xmlObjectData.StudentInfo[0].CounselorName &&
+      xmlObjectData.StudentInfo[0].CounselorEmail &&
+      xmlObjectData.StudentInfo[0].CounselorStaffGU
+        ? {
+            name: xmlObjectData.StudentInfo[0].CounselorName[0],
+            email: xmlObjectData.StudentInfo[0].CounselorEmail[0],
+            staffGu: xmlObjectData.StudentInfo[0].CounselorStaffGU[0],
+          }
+        : undefined,
+    currentSchool: xmlObjectData.StudentInfo[0].CurrentSchool[0],
+    dentist: xmlObjectData.StudentInfo[0].Dentist
+      ? {
+          name: xmlObjectData.StudentInfo[0].Dentist[0]['@_Name'][0],
+          phone: xmlObjectData.StudentInfo[0].Dentist[0]['@_Phone'][0],
+          extn: xmlObjectData.StudentInfo[0].Dentist[0]['@_Extn'][0],
+          office: xmlObjectData.StudentInfo[0].Dentist[0]['@_Office'][0],
+        }
+      : undefined,
+    physician: xmlObjectData.StudentInfo[0].Physician
+      ? {
+          name: xmlObjectData.StudentInfo[0].Physician[0]['@_Name'][0],
+          phone: xmlObjectData.StudentInfo[0].Physician[0]['@_Phone'][0],
+          extn: xmlObjectData.StudentInfo[0].Physician[0]['@_Extn'][0],
+          hospital: xmlObjectData.StudentInfo[0].Physician[0]['@_Hospital'][0],
+        }
+      : undefined,
+    id: optional(xmlObjectData.StudentInfo[0].PermID),
+    orgYearGu: optional(xmlObjectData.StudentInfo[0].OrgYearGU),
+    phone: optional(xmlObjectData.StudentInfo[0].Phone),
+    email: optional(xmlObjectData.StudentInfo[0].EMail),
+    emergencyContacts: xmlObjectData.StudentInfo[0].EmergencyContacts
+      ? xmlObjectData.StudentInfo[0].EmergencyContacts[0].EmergencyContact?.map((contact) => ({
+          name: optional(contact['@_Name']),
+          phone: {
+            home: optional(contact['@_HomePhone']),
+            mobile: optional(contact['@_MobilePhone']),
+            other: optional(contact['@_OtherPhone']),
+            work: optional(contact['@_WorkPhone']),
+          },
+          relationship: optional(contact['@_Relationship']),
+        }))
+      : [],
+    gender: optional(xmlObjectData.StudentInfo[0].Gender),
+    grade: optional(xmlObjectData.StudentInfo[0].Grade),
+    lockerInfoRecords: optional(xmlObjectData.StudentInfo[0].LockerInfoRecords),
+    homeLanguage: optional(xmlObjectData.StudentInfo[0].HomeLanguage),
+    homeRoom: optional(xmlObjectData.StudentInfo[0].HomeRoom),
+    homeRoomTeacher: {
+      email: optional(xmlObjectData.StudentInfo[0].HomeRoomTchEMail),
+      name: optional(xmlObjectData.StudentInfo[0].HomeRoomTch),
+      staffGu: optional(xmlObjectData.StudentInfo[0].HomeRoomTchStaffGU),
+    },
+    additionalInfo: xmlObjectData.StudentInfo[0].UserDefinedGroupBoxes[0].UserDefinedGroupBox
+      ? (xmlObjectData.StudentInfo[0].UserDefinedGroupBoxes[0].UserDefinedGroupBox.map((definedBox) => ({
+          id: optional(definedBox['@_GroupBoxID']), // string | undefined
+          type: definedBox['@_GroupBoxLabel'][0], // string
+          vcId: optional(definedBox['@_VCID']), // string | undefined
+          items: definedBox.UserDefinedItems[0].UserDefinedItem.map((item) => ({
+            source: {
+              element: item['@_SourceElement'][0],
+              object: item['@_SourceObject'][0],
+            },
+            vcId: item['@_VCID'][0],
+            value: item['@_Value'][0],
+            type: item['@_ItemType'][0],
+          })) as AdditionalInfoItem[],
+        })) as AdditionalInfo[])
+      : [],
+  } as StudentInfo;
+}
+
 export default class Client extends rest.Client {
   private hostUrl: string;
-  // The legacy transport. REST (the base class, `super`) is primary now; SOAP is kept around by
-  // composition only as a fallback/for the methods that haven't been moved to REST yet, since
-  // their REST JSON shapes haven't been confirmed - see rest/Client/Client.ts for caveats.
+  // The legacy transport. REST is the base class (`super`); SOAP is kept around by composition,
+  // both as the fallback for REST-migrated methods and for the methods that haven't been moved to
+  // REST yet, since their REST JSON shapes haven't been confirmed - see rest/Client/Client.ts.
   private soapClient: InstanceType<typeof soap.Client>;
-  constructor(credentials: LoginCredentials, proxyUrl: string = 'native') {
+  /**
+   * Which transport REST-migrated methods try first. REST falls back to SOAP on a 404; SOAP falls
+   * back to REST when its error message mentions "deprecated" - see `utils/fallback`. SOAP-only
+   * methods (reportCards, schoolInfo, messages, calendar, validateCredentials) ignore this.
+   */
+  public readonly api: ApiType;
+  constructor(credentials: LoginCredentials, proxyUrl: string = 'native', api: ApiType = 'rest') {
     super(credentials, proxyUrl);
     this.hostUrl = new URL(credentials.districtUrl).origin + '/';
     this.soapClient = new soap.Client(credentials, proxyUrl);
+    this.api = api;
   }
 
   /**
@@ -605,24 +936,30 @@ export default class Client extends rest.Client {
    * ```
    */
   public documents(): Promise<[Document[],any]> {
-    return new Promise((res, rej) => {
+    const restFetch = () =>
       super
         .processRequest<any>({
           methodName: 'GetStudentDocuments',
           paramStr: { childIntID: 0, languageCode: 'ENG' },
         })
-        .then((result: any) => {
+        .then((result: any): [StudentDocumentDataJSON[], any] => {
           if (!(isStudentDocumentsJSON(result) || true)) {
-            return rej(new Error('Unexpected GetStudentDocuments REST response shape'));
+            throw new Error('Unexpected GetStudentDocuments REST response shape');
           }
-          const docs: StudentDocumentDataJSON[] = result.studentDocuments.studentDocumentDatas ?? [];
-          res([
-            docs.map((doc) => new Document(doc, super.credentials)),
-            result.extraData,
-          ]);
+          return [result.studentDocuments.studentDocumentDatas ?? [], result.extraData];
+        });
+    const soapFetch = () =>
+      this.soapClient
+        .request<DocumentXMLObject & { extraData?: any }>({
+          methodName: 'GetStudentDocumentInitialData',
+          paramStr: { childIntId: 0 },
         })
-        .catch(rej);
-    });
+        .then((xmlObject): [StudentDocumentDataJSON[], any] => [parseDocumentsXML(xmlObject), xmlObject.extraData]);
+
+    return withFallback(this.api, restFetch, soapFetch).then(([docs, extraData]): [Document[], any] => [
+      docs.map((doc) => new Document(doc, this.credentials, this.api)),
+      extraData,
+    ]);
   }
 
   /**
@@ -716,20 +1053,22 @@ export default class Client extends rest.Client {
    * ```
    */
   public schedule(termIndex?: number): Promise<[any,any]> {
-    return new Promise((res, rej) => {
+    const paramStr = { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) };
+    const restFetch = () =>
       super
-        .processRequest<any>({
-          methodName: 'StudentClassList',
-          paramStr: { childIntId: 0, ...(termIndex != null ? { TermIndex: termIndex } : {}) },
-        })
-        .then((result: any) => {
+        .processRequest<any>({ methodName: 'StudentClassList', paramStr })
+        .then((result: any): [any, any] => {
           if (isStudentClassListJSON(result)) {
-            return res([parseStudentClassListJSON(result), result.extraData]);
+            return [parseStudentClassListJSON(result), result.extraData];
           }
-          rej(new Error('Unexpected StudentClassList REST response shape'));
-        })
-        .catch(rej);
-    });
+          throw new Error('Unexpected StudentClassList REST response shape');
+        });
+    const soapFetch = () =>
+      this.soapClient
+        .request<any>({ methodName: 'StudentClassList', paramStr })
+        .then((xmlObject: any): [any, any] => [parseStudentClassListXML(xmlObject), xmlObject.extraData]);
+
+    return withFallback(this.api, restFetch, soapFetch);
   }
 
   /**
@@ -746,29 +1085,35 @@ export default class Client extends rest.Client {
    * ```
    */
   public attendance(orgYearGu?: string | null): Promise<[Attendance,any]> {
-    return new Promise((res, rej) => {
+    const restFetch = () =>
       super
         .processRequest<any>({
           methodName: 'GetStudentAttendanceList',
           paramStr: { childIntID: 0, orgYearGU: orgYearGu ?? '' },
         })
-        .then((result: any) => {
+        .then((result: any): [Attendance, any] => {
           if (isAttendanceJSON(result) || true) {
-            return res([parseAttendanceJSON(result), result.extraData]);
+            return [parseAttendanceJSON(result), result.extraData];
           }
           if (result?.dailyAttendance != null) {
-            return rej(
-              new Error(
-                'This school uses daily (twice-daily) attendance tracking, which has a different shape ' +
-                  'than periodAttendance and is not supported by this method yet - see the comment on ' +
-                  'isAttendanceJSON/parseAttendanceJSON for what would be needed.'
-              )
+            throw new Error(
+              'This school uses daily (twice-daily) attendance tracking, which has a different shape ' +
+                'than periodAttendance and is not supported by this method yet - see the comment on ' +
+                'isAttendanceJSON/parseAttendanceJSON for what would be needed.'
             );
           }
-          rej(new Error('Unexpected GetStudentAttendanceList REST response shape'));
+          throw new Error('Unexpected GetStudentAttendanceList REST response shape');
+        });
+    // The SOAP `Attendance` method never took an orgYearGU - it always returns the main school's.
+    const soapFetch = () =>
+      this.soapClient
+        .request<AttendanceXMLObject & { extraData?: any }>({
+          methodName: 'Attendance',
+          paramStr: { childIntId: 0 },
         })
-        .catch(rej);
-    });
+        .then((xmlObject): [Attendance, any] => [parseAttendanceXML(xmlObject), xmlObject.extraData]);
+
+    return withFallback(this.api, restFetch, soapFetch);
   }
 
   /**
@@ -789,11 +1134,17 @@ export default class Client extends rest.Client {
 
 
 
+      // Picks the parser by shape rather than by `this.api`: the response (or cache entry) may
+      // have come from either transport depending on whether a fallback happened.
       const parseBranch = (xmlObject: GradebookXMLObject | any) => {
-          if (isGradebookJSON(xmlObject) || true) {
-            return res([parseGradebookJSON(xmlObject, reportingPeriodIndex), xmlObject.extraData]);
+          try {
+            const gradebook = isGradebookJSON(xmlObject)
+              ? parseGradebookJSON(xmlObject, reportingPeriodIndex)
+              : parseGradebookXML(xmlObject, reportingPeriodIndex);
+            res([gradebook, xmlObject.extraData]);
+          } catch (err) {
+            rej(err);
           }
-          rej(new Error('Unexpected Gradebook REST response shape'));
         }
 
         async function mykeysbro(){
@@ -813,10 +1164,23 @@ export default class Client extends rest.Client {
     ...(orgYearGu != null ? { ConcurrentSchOrgYearGU: orgYearGu } : {}),
   };
 
-  return super.processRequest<GradebookXMLObject & { extraData?: any }>({
-    methodName: 'Gradebook',
-    paramStr: gradebookParams,
-  });
+  return withFallback<GradebookXMLObject & { extraData?: any }>(
+    this.api,
+    () =>
+      super.processRequest<GradebookXMLObject & { extraData?: any }>({
+        methodName: 'Gradebook',
+        paramStr: gradebookParams,
+      }),
+    () =>
+      this.soapClient.request<GradebookXMLObject & { extraData?: any }>(
+        { methodName: 'Gradebook', paramStr: gradebookParams },
+        (xml) =>
+          new XMLFactory(xml)
+            .encodeAttribute('MeasureDescription', 'HasDropBox')
+            .encodeAttribute('Measure', 'Type')
+            .toString()
+      )
+  );
 };
 
 
@@ -855,7 +1219,7 @@ export default class Client extends rest.Client {
                 xmlCache[identifier]={data:result,age:Date.now()}
                 await AsyncStorage.setItem("xmlCache2",JSON.stringify(xmlCache))
                 parseBranch(result)
-              })
+              }).catch(err=>rej(err))
             }
           })().catch(err=>rej(err))
         }
@@ -898,17 +1262,21 @@ export default class Client extends rest.Client {
   //altnerate method for studentInfo when studentInfo fails:
   //those things commented out are not applicable here
   public ChildList():Promise<[StudentInfo,any]>{
-    return new Promise<[StudentInfo,any]>((res,rej)=>{
+    const restFetch = () =>
       super
         .processRequest<any>({ methodName: 'GetChildListData' })
-        .then((result: any) => {
+        .then((result: any): [StudentInfo, any] => {
           if (isChildListJSON(result) || true) {
-            return res([parseChildListJSON(result), result.extraData]);
+            return [parseChildListJSON(result), result.extraData];
           }
-          rej(new Error('Unexpected ChildList REST response shape'));
-        })
-        .catch(rej);
-    });
+          throw new Error('Unexpected ChildList REST response shape');
+        });
+    const soapFetch = () =>
+      this.soapClient
+        .request<any>({ methodName: 'ChildList' })
+        .then((xmlObject: any): [StudentInfo, any] => [parseChildListXML(xmlObject), xmlObject.extraData]);
+
+    return withFallback(this.api, restFetch, soapFetch);
   }
 
 
@@ -921,17 +1289,24 @@ export default class Client extends rest.Client {
    * ```
    */
   public studentInfo(): Promise<[StudentInfo,any]> {
-    return new Promise<[StudentInfo,any]>((res, rej) => {
+    const restFetch = () =>
       super
         .processRequest<any>({ methodName: 'GetStudentInfoData' })
-        .then((xmlObjectData: any) => {
-          if (isStudentInfoJSON(xmlObjectData) || true) {
-            return res([parseStudentInfoJSON(xmlObjectData), xmlObjectData.extraData]);
+        .then((result: any): [StudentInfo, any] => {
+          if (isStudentInfoJSON(result) || true) {
+            return [parseStudentInfoJSON(result), result.extraData];
           }
-          rej(new Error('Unexpected StudentInfo REST response shape'));
+          throw new Error('Unexpected StudentInfo REST response shape');
+        });
+    const soapFetch = () =>
+      this.soapClient
+        .request<StudentInfoXMLObject & { extraData?: any }>({
+          methodName: 'StudentInfo',
+          paramStr: { childIntId: 0 },
         })
-        .catch(rej);
-    });
+        .then((xmlObject): [StudentInfo, any] => [parseStudentInfoXML(xmlObject), xmlObject.extraData]);
+
+    return withFallback(this.api, restFetch, soapFetch);
   }
 
   private fetchEventsWithinInterval(date: Date) {

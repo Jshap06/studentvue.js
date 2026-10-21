@@ -1,6 +1,7 @@
 import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import soap from '../../utils/soap/soap';
 import rest from '../../utils/rest/rest';
+import { ApiType, withFallback } from '../../utils/fallback/fallback';
 
 /**
  * File class
@@ -22,7 +23,19 @@ export default abstract class File<T> extends soap.Client {
    */
   private readonly restMethodName?: string;
 
-  public constructor(credentials: LoginCredentials, documentGu: string, methodName: string, restMethodName?: string) {
+  /**
+   * Which transport `get()` tries first when both are available (`restMethodName` is set). The
+   * other one is only used as a fallback - see `utils/fallback`.
+   */
+  private readonly api: ApiType;
+
+  public constructor(
+    credentials: LoginCredentials,
+    documentGu: string,
+    methodName: string,
+    restMethodName?: string,
+    api: ApiType = 'rest'
+  ) {
     super(credentials);
 
     /**
@@ -50,6 +63,7 @@ export default abstract class File<T> extends soap.Client {
     this.methodName = methodName;
 
     this.restMethodName = restMethodName;
+    this.api = api;
   }
 
   /**
@@ -80,30 +94,24 @@ export default abstract class File<T> extends soap.Client {
    * ```
    */
   public get(): Promise<T> {
-    if (this.restMethodName != null) {
-      return new Promise((res, rej) => {
-        new rest.Client(this.credentials,this.proxyUrl)
-          .request<Record<string, unknown>>({
-            methodName: this.restMethodName as string,
-            paramStr: { childIntID: 0, documentGU: this.documentGu },
-          })
-          .then((data) => {
-            res(this.parseXMLObject(data));
-          })
-          .catch(rej);
-      });
-    }
-
-    return new Promise((res, rej) => {
+    const soapGet = () =>
       super
         .processRequest<Record<string, unknown>>({
           methodName: this.methodName,
           paramStr: { childIntId: 0, DocumentGU: this.documentGu },
         })
-        .then((base64Data) => {
-          res(this.parseXMLObject(base64Data));
+        .then((base64Data) => this.parseXMLObject(base64Data));
+
+    if (this.restMethodName == null) return soapGet();
+
+    const restGet = () =>
+      new rest.Client(this.credentials, this.proxyUrl)
+        .request<Record<string, unknown>>({
+          methodName: this.restMethodName as string,
+          paramStr: { childIntID: 0, documentGU: this.documentGu },
         })
-        .catch(rej);
-    });
+        .then((data) => this.parseXMLObject(data));
+
+    return withFallback(this.api, restGet, soapGet);
   }
 }

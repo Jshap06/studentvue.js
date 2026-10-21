@@ -5,6 +5,7 @@ import { DistrictListXMLObject } from './StudentVue.xml';
 import RequestException from './RequestException/RequestException';
 import { Gradebook } from './Client/Client.interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ApiType } from '../utils/fallback/fallback';
 
 
 //helper function fuck y'all goofy ahh
@@ -64,9 +65,11 @@ export {Client}
  * Login to the StudentVUE API
  * @param {string} districtUrl The URL of the district which can be found using `findDistricts()` method
  * @param {UserCredentials} credentials User credentials of the student
+ * @param {string} proxyUrl The proxy to relay requests through, or `'native'` to hit the district directly
+ * @param {ApiType} api Which API to try first (`'rest'` or `'soap'`). Defaults to `'rest'`
  * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
  */
-export function login(districtUrl: string, credentials: UserCredentials,proxyUrl:string="https://studentvuelib.up.railway.app"): Promise<{client:Client,responses:[Gradebook,any][]}> {
+export function login(districtUrl: string, credentials: UserCredentials,proxyUrl:string="https://studentvuelib.up.railway.app",api:ApiType='rest'): Promise<{client:Client,responses:[Gradebook,any][]}> {
   return new Promise((res, rej) => {
     if (districtUrl.length === 0)
       return rej(new RequestException({ message: 'District URL cannot be an empty string' }));
@@ -77,11 +80,12 @@ export function login(districtUrl: string, credentials: UserCredentials,proxyUrl
       {
         username: credentials.username,
         password: credentials.password,
-        districtUrl: endpoint,
+        districtUrl: url,
         isParent: credentials.isParent,
         encrypted:credentials.encrypted
       },
-      proxyUrl
+      proxyUrl,
+      api
     );
       getGradebooks(client,null,null)
       .then((response) => {

@@ -1,6 +1,7 @@
 import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import File from '../File/File';
 import { DocumentFile } from './Document.interfaces';
+import { ApiType } from '../../utils/fallback/fallback';
 /**
  * The shape of one entry in REST's `GetStudentDocuments` response
  * (`data.studentDocuments.studentDocumentDatas[]`), confirmed against a real sample.
@@ -21,13 +22,11 @@ export default class Document extends File<DocumentFile[]> {
     };
     readonly comment: string;
     /**
-     * Parses REST's `GetStudentDocumentContent` response
-     * (`data.studentAttachedDocumentData.documentDatas[]`), confirmed against a real sample. The
-     * SOAP shape this replaced (`DocumentFileXMLObject`) is no longer handled here - there's no
-     * fallback, per the same "REST primary, no SOAP fallback" approach used for every other
-     * migrated method, since a REST failure should surface as a real error instead of silently
-     * falling back to a second, differently-shaped SOAP error.
+     * Parses either REST's `GetStudentDocumentContent` response
+     * (`data.studentAttachedDocumentData.documentDatas[]`, confirmed against a real sample) or the
+     * SOAP `GetContentOfAttachedDoc` XML (`DocumentFileXMLObject`), depending on which transport
+     * `get()` ended up using - see `utils/fallback`.
      */
     protected parseXMLObject(json: any): DocumentFile[];
-    constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials);
+    constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials, api?: ApiType);
 }

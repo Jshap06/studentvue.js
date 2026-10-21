@@ -1,5 +1,6 @@
 import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import soap from '../../utils/soap/soap';
+import { ApiType } from '../../utils/fallback/fallback';
 /**
  * File class
  * @abstract
@@ -17,7 +18,12 @@ export default abstract class File<T> extends soap.Client {
      * been confirmed yet.
      */
     private readonly restMethodName?;
-    constructor(credentials: LoginCredentials, documentGu: string, methodName: string, restMethodName?: string);
+    /**
+     * Which transport `get()` tries first when both are available (`restMethodName` is set). The
+     * other one is only used as a fallback - see `utils/fallback`.
+     */
+    private readonly api;
+    constructor(credentials: LoginCredentials, documentGu: string, methodName: string, restMethodName?: string, api?: ApiType);
     /**
      * Parse the response into an ordinary object. This method must be written for every class
      * that extends File. When `restMethodName` is set (REST path), this receives the REST JSON

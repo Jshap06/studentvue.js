@@ -21,14 +21,17 @@ declare module 'studentvue/StudentVue/StudentVue' {
     import { SchoolDistrict, UserCredentials } from 'studentvue/StudentVue/StudentVue.interfaces';
     import Client from 'studentvue/StudentVue/Client/Client';
     import { Gradebook } from 'studentvue/StudentVue/Client/Client.interfaces';
+    import { ApiType } from 'studentvue/utils/fallback/fallback';
     export { Client };
     /**
         * Login to the StudentVUE API
         * @param {string} districtUrl The URL of the district which can be found using `findDistricts()` method
         * @param {UserCredentials} credentials User credentials of the student
+        * @param {string} proxyUrl The proxy to relay requests through, or `'native'` to hit the district directly
+        * @param {ApiType} api Which API to try first (`'rest'` or `'soap'`). Defaults to `'rest'`
         * @returns {Promise<Client>} Returns the client and the information of the student upon successful login
         */
-    export function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string): Promise<{
+    export function login(districtUrl: string, credentials: UserCredentials, proxyUrl?: string, api?: ApiType): Promise<{
             client: Client;
             responses: [Gradebook, any][];
     }>;
@@ -192,10 +195,14 @@ declare module 'studentvue/StudentVue/Client/Client' {
         *   confirmed, still SOAP-only via `this.soapClient`.
         * - validateCredentials: intentionally left on SOAP - relies on a SOAP-specific bogus-method
         *   error-message trick, no REST equivalent attempted.
+        * - Every REST-migrated method above also has its old SOAP implementation restored. The `api`
+        *   constructor param picks which one goes first; REST falls back to SOAP on a 404, SOAP falls back
+        *   to REST on an error mentioning "deprecated" (see utils/fallback).
         */
     import { LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     import rest from 'studentvue/utils/rest/rest';
     import { SchoolInfo, StudentInfo } from 'studentvue/StudentVue/Client/Client.interfaces';
+    import { ApiType } from 'studentvue/utils/fallback/fallback';
     import Message from 'studentvue/StudentVue/Message/Message';
     import { Calendar, CalendarOptions } from 'studentvue/StudentVue/Client/Interfaces/Calendar';
     import { Gradebook } from 'studentvue/StudentVue/Client/Interfaces/Gradebook';
@@ -203,7 +210,13 @@ declare module 'studentvue/StudentVue/Client/Client' {
     import ReportCard from 'studentvue/StudentVue/ReportCard/ReportCard';
     import Document from 'studentvue/StudentVue/Document/Document';
     export default class Client extends rest.Client {
-            constructor(credentials: LoginCredentials, proxyUrl?: string);
+            /**
+                * Which transport REST-migrated methods try first. REST falls back to SOAP on a 404; SOAP falls
+                * back to REST when its error message mentions "deprecated" - see `utils/fallback`. SOAP-only
+                * methods (reportCards, schoolInfo, messages, calendar, validateCredentials) ignore this.
+                */
+            readonly api: ApiType;
+            constructor(credentials: LoginCredentials, proxyUrl?: string, api?: ApiType);
             /**
                 * Validate's the user's credentials. It will throw an error if credentials are incorrect
                 */
@@ -350,6 +363,7 @@ declare module 'studentvue/StudentVue/Attachment/Attachment' {
 declare module 'studentvue/StudentVue/File/File' {
     import { LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     import soap from 'studentvue/utils/soap/soap';
+    import { ApiType } from 'studentvue/utils/fallback/fallback';
     /**
         * File class
         * @abstract
@@ -358,7 +372,7 @@ declare module 'studentvue/StudentVue/File/File' {
         */
     export default abstract class File<T> extends soap.Client {
             readonly documentGu: string;
-            constructor(credentials: LoginCredentials, documentGu: string, methodName: string, restMethodName?: string);
+            constructor(credentials: LoginCredentials, documentGu: string, methodName: string, restMethodName?: string, api?: ApiType);
             /**
                 * Parse the response into an ordinary object. This method must be written for every class
                 * that extends File. When `restMethodName` is set (REST path), this receives the REST JSON
@@ -472,6 +486,31 @@ declare module 'studentvue/StudentVue/StudentVue.interfaces' {
     
         encrypted:boolean
     }
+}
+
+declare module 'studentvue/utils/fallback/fallback' {
+    /**
+        * Which transport a client tries first. The other one is only used as a fallback - see
+        * `withFallback`.
+        */
+    export type ApiType = 'rest' | 'soap';
+    /**
+        * True when a REST call failed because the endpoint doesn't exist (HTTP 404) - e.g. a district
+        * whose Synergy install predates the mobile REST API. `rest.Client` attaches the HTTP status to
+        * the errors it throws as `status`.
+        */
+    export function isNotFound(err: any): boolean;
+    /**
+        * True when a SOAP call failed with an error message saying the method/endpoint is deprecated.
+        */
+    export function isDeprecated(err: any): boolean;
+    /**
+        * Runs the `api` transport first and falls back to the other one:
+        * - REST first: retries over SOAP only if REST 404s.
+        * - SOAP first: retries over REST only if SOAP errors with a message containing "deprecated".
+        * Any other error is rethrown as-is.
+        */
+    export function withFallback<T>(api: ApiType, rest: () => Promise<T>, soap: () => Promise<T>): Promise<T>;
 }
 
 declare module 'studentvue/utils/soap/Client/Client.interfaces' {
@@ -1414,6 +1453,7 @@ declare module 'studentvue/StudentVue/Document/Document' {
     import { LoginCredentials } from 'studentvue/utils/soap/Client/Client.interfaces';
     import File from 'studentvue/StudentVue/File/File';
     import { DocumentFile } from 'studentvue/StudentVue/Document/Document.interfaces';
+    import { ApiType } from 'studentvue/utils/fallback/fallback';
     /**
         * The shape of one entry in REST's `GetStudentDocuments` response
         * (`data.studentDocuments.studentDocumentDatas[]`), confirmed against a real sample.
@@ -1434,15 +1474,13 @@ declare module 'studentvue/StudentVue/Document/Document' {
             };
             readonly comment: string;
             /**
-                * Parses REST's `GetStudentDocumentContent` response
-                * (`data.studentAttachedDocumentData.documentDatas[]`), confirmed against a real sample. The
-                * SOAP shape this replaced (`DocumentFileXMLObject`) is no longer handled here - there's no
-                * fallback, per the same "REST primary, no SOAP fallback" approach used for every other
-                * migrated method, since a REST failure should surface as a real error instead of silently
-                * falling back to a second, differently-shaped SOAP error.
+                * Parses either REST's `GetStudentDocumentContent` response
+                * (`data.studentAttachedDocumentData.documentDatas[]`, confirmed against a real sample) or the
+                * SOAP `GetContentOfAttachedDoc` XML (`DocumentFileXMLObject`), depending on which transport
+                * `get()` ended up using - see `utils/fallback`.
                 */
             protected parseXMLObject(json: any): DocumentFile[];
-            constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials);
+            constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials, api?: ApiType);
     }
 }
 

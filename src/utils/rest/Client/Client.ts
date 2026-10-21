@@ -23,6 +23,16 @@ function toBase64(input: string): string {
   return btoa(binary);
 }
 
+/**
+ * An `Error` carrying the HTTP status it failed with as `status`, so callers can tell a missing
+ * endpoint (404) apart from other failures - see `utils/fallback`.
+ */
+function httpError(status: number | undefined, message?: string): Error & { status?: number } {
+  const error: Error & { status?: number } = new Error(message ?? `HTTP error! status: ${status}`);
+  error.status = status;
+  return error;
+}
+
 // Fixed key/IV embedded in the official app for the `edupointkeyversion` header. Used to apply
 // to be a session cookie; it's now sent as a standalone header on every request instead, but the
 // value itself is unchanged - just the current date and app version, AES-CBC/PKCS7 encrypted.
@@ -170,8 +180,7 @@ export default class Client {
   }
 
   private buildUrl(webServiceHandleName: string, methodName: string): string {
-    const origin = new URL(this.__district__).origin;
-    return `${origin}/api/v1/mobile/${webServiceHandleName}/${encodeURIComponent(methodName)}`;
+    return `${this.__district__}/api/v1/mobile/${webServiceHandleName}/${encodeURIComponent(methodName)}`;
   }
 
   /**
@@ -296,7 +305,7 @@ export default class Client {
     }
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw httpError(response.status);
     }
 
     const result: ParsedRestResult<T> = await response.json();
@@ -369,7 +378,7 @@ export default class Client {
 
     let response = await doFetch();
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw httpError(response.status);
     }
     let relay: {
       status: boolean;
@@ -394,13 +403,13 @@ export default class Client {
       auth = { type: 'bearer', token: this.tokens.accessToken as string };
       response = await doFetch();
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw httpError(response.status);
       }
       relay = await response.json();
     }
 
     if (!relay.status) {
-      throw new Error(relay.message ?? 'Unknown error from the proxy');
+      throw httpError(relay.httpStatus, relay.message ?? 'Unknown error from the proxy');
     }
 
     const result = relay.response as ParsedRestResult<T>;

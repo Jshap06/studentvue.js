@@ -153,7 +153,7 @@ export default class Client {
         },
       });
 
-      fetch(this.district, {
+      fetch(this.district+"Service/PXPCommunication.asmx", {
         method: 'POST',
         credentials:"include",
         headers: {

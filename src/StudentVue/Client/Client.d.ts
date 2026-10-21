@@ -17,10 +17,14 @@
  *   confirmed, still SOAP-only via `this.soapClient`.
  * - validateCredentials: intentionally left on SOAP - relies on a SOAP-specific bogus-method
  *   error-message trick, no REST equivalent attempted.
+ * - Every REST-migrated method above also has its old SOAP implementation restored. The `api`
+ *   constructor param picks which one goes first; REST falls back to SOAP on a 404, SOAP falls back
+ *   to REST on an error mentioning "deprecated" (see utils/fallback).
  */
 import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import rest from '../../utils/rest/rest';
 import { SchoolInfo, StudentInfo } from './Client.interfaces';
+import { ApiType } from '../../utils/fallback/fallback';
 import Message from '../Message/Message';
 import { Calendar, CalendarOptions } from './Interfaces/Calendar';
 import { Gradebook } from './Interfaces/Gradebook';
@@ -30,7 +34,13 @@ import Document from '../Document/Document';
 export default class Client extends rest.Client {
     private hostUrl;
     private soapClient;
-    constructor(credentials: LoginCredentials, proxyUrl?: string);
+    /**
+     * Which transport REST-migrated methods try first. REST falls back to SOAP on a 404; SOAP falls
+     * back to REST when its error message mentions "deprecated" - see `utils/fallback`. SOAP-only
+     * methods (reportCards, schoolInfo, messages, calendar, validateCredentials) ignore this.
+     */
+    readonly api: ApiType;
+    constructor(credentials: LoginCredentials, proxyUrl?: string, api?: ApiType);
     /**
      * Validate's the user's credentials. It will throw an error if credentials are incorrect
      */

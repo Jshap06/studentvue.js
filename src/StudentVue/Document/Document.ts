@@ -2,6 +2,8 @@ import { LoginCredentials } from '../../utils/soap/Client/Client.interfaces';
 import File from '../File/File';
 import { DocumentFile } from './Document.interfaces';
 import { parse as dateParse } from "date-fns";
+import { DocumentFileXMLObject } from './Document.xml';
+import { ApiType } from '../../utils/fallback/fallback';
 
 /**
  * The shape of one entry in REST's `GetStudentDocuments` response
@@ -26,14 +28,26 @@ export default class Document extends File<DocumentFile[]> {
   public readonly comment: string;
 
   /**
-   * Parses REST's `GetStudentDocumentContent` response
-   * (`data.studentAttachedDocumentData.documentDatas[]`), confirmed against a real sample. The
-   * SOAP shape this replaced (`DocumentFileXMLObject`) is no longer handled here - there's no
-   * fallback, per the same "REST primary, no SOAP fallback" approach used for every other
-   * migrated method, since a REST failure should surface as a real error instead of silently
-   * falling back to a second, differently-shaped SOAP error.
+   * Parses either REST's `GetStudentDocumentContent` response
+   * (`data.studentAttachedDocumentData.documentDatas[]`, confirmed against a real sample) or the
+   * SOAP `GetContentOfAttachedDoc` XML (`DocumentFileXMLObject`), depending on which transport
+   * `get()` ended up using - see `utils/fallback`.
    */
   protected parseXMLObject(json: any): DocumentFile[] {
+    if (json?.StudentAttachedDocumentData != null) {
+      return (json as DocumentFileXMLObject).StudentAttachedDocumentData[0].DocumentDatas[0].DocumentData.map(
+        (document) => ({
+          file: {
+            name: document['@_FileName'][0],
+            type: document['@_DocType'][0],
+            date: new Date(document['@_DocDate'][0]),
+          },
+          category: document['@_Category'][0],
+          notes: document['@_Notes'][0],
+          base64: document.Base64Code[0],
+        })
+      );
+    }
     return json.studentAttachedDocumentData.documentDatas.map((document: any) => ({
       file: {
         name: document.fileName,
@@ -46,8 +60,8 @@ export default class Document extends File<DocumentFile[]> {
     }));
   }
 
-  public constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials) {
-    super(credentials, doc.documentGU, 'GetContentOfAttachedDoc', 'GetStudentDocumentContent');
+  public constructor(doc: StudentDocumentDataJSON, credentials: LoginCredentials, api: ApiType = 'rest') {
+    super(credentials, doc.documentGU, 'GetContentOfAttachedDoc', 'GetStudentDocumentContent', api);
 
     /**
      * The properties of the file

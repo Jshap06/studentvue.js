@@ -39,6 +39,7 @@ import EventType from '../../Constants/EventType';
 import _, { result } from 'lodash';
 import { Assignment, Gradebook, Mark, WeightedCategory } from './Interfaces/Gradebook';
 import { AbsentPeriod, Attendance, PeriodInfo } from './Interfaces/Attendance';
+import { HallPassData } from './Interfaces/HallPass';
 import { SchoolInfoXMLObject } from './Interfaces/xml/SchoolInfo';
 import { ReportCardsXMLObject } from '../ReportCard/ReportCard.xml';
 import ReportCard from '../ReportCard/ReportCard';
@@ -890,6 +891,25 @@ function parseStudentInfoXML(xmlObjectData: StudentInfoXMLObject): StudentInfo {
   } as StudentInfo;
 }
 
+
+
+function parseHallPassJSON(result: any): HallPassData {
+  const data = result?.studentHallPassXML ?? {};
+  const setup = data.hallPassRoomSetup ?? {};
+  const toArray = (value: any): any[] => (Array.isArray(value) ? value : value == null ? [] : [value]);
+  return {
+    studentGu: data.studentGU ?? '',
+    serverDateTime: data.currentDateTime ?? '',
+    setup: {
+      maxDaysForFuturePass: Number(setup.hallPassMaxDaysForFuturePass) || 0,
+      countUp: setup.hallPassCountUp === true || setup.hallPassCountUp === 'true',
+      allowStudentsToEndHallPass:
+        setup.allowStudentsToEndHallPass === true || setup.allowStudentsToEndHallPass === 'true',
+    },
+    roomTypes: toArray(setup.hallPassRoomTypes),
+    records: toArray(data.studentHallPassRecords),
+  };
+}
 export default class Client extends rest.Client {
   private hostUrl: string;
   // The legacy transport. REST is the base class (`super`); SOAP is kept around by composition,
@@ -1277,6 +1297,21 @@ export default class Client extends rest.Client {
         .then((xmlObject: any): [StudentInfo, any] => [parseChildListXML(xmlObject), xmlObject.extraData]);
 
     return withFallback(this.api, restFetch, soapFetch);
+  }
+
+
+  /**
+   * Gets the student's hall pass data: the school's hall pass settings, the destinations a pass
+   * can be requested for, and the student's current/scheduled passes.
+   *
+   * REST-only (`GetHallPassData`)
+   * @returns {Promise<HallPassData>} Returns a HallPassData object
+   * @description
+   */
+  public hallPass(): Promise<[HallPassData, any]> {
+    return super
+      .processRequest<any>({ methodName: 'GetHallPassData', paramStr: { childIntID: 0 } })
+      .then((result: any): [HallPassData, any] => [parseHallPassJSON(result), result?.extraData]);
   }
 
 

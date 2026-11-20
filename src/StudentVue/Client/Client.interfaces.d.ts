@@ -4,6 +4,7 @@ export * from './Interfaces/Calendar';
 export * from './Interfaces/Attendance';
 export * from './Interfaces/Schedule';
 export * from './Interfaces/SchoolInfo';
+export * from './Interfaces/HallPass';
 
 /**
  * Information about the staff member working in the school facility
